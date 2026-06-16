@@ -1,5 +1,8 @@
 import axios from 'axios';
 import type { ApiResponse } from '@/types';
+import { capacitorHttpAdapter } from '@/api/capacitorHttpAdapter';
+import { isMobileApp } from '@/utils/app';
+import { formatApiError, getApiPrefix } from '@/utils/serverConfig';
 
 const TOKEN_KEY = 'uqm_token';
 const GROUP_KEY = 'uqm_current_group_id';
@@ -16,11 +19,12 @@ export const setStoredGroupId = (groupId: number) =>
   localStorage.setItem(GROUP_KEY, String(groupId));
 
 const api = axios.create({
-  baseURL: '/api',
-  timeout: 15000,
+  timeout: 30000,
+  ...(isMobileApp() ? { adapter: capacitorHttpAdapter } : {}),
 });
 
 api.interceptors.request.use((config) => {
+  config.baseURL = getApiPrefix();
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -44,8 +48,11 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       clearToken();
       window.location.href = '/login';
+      return Promise.reject(err);
     }
-    return Promise.reject(err);
+    const body = err.response?.data as ApiResponse<unknown> | undefined;
+    const msg = body?.message || formatApiError(err);
+    return Promise.reject(new Error(msg));
   }
 );
 

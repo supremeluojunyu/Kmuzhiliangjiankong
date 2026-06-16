@@ -2,7 +2,9 @@ package com.uqm.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uqm.common.BusinessException;
+import com.uqm.dto.AppReleaseSettingsDto;
 import com.uqm.dto.AuthSettingsDto;
+import com.uqm.dto.BrandingSettingsDto;
 import com.uqm.dto.NotificationSettingsDto;
 import com.uqm.dto.PublicAuthConfigVo;
 import com.uqm.dto.RetentionSettingsDto;
@@ -25,6 +27,8 @@ public class SystemConfigService {
     public static final String KEY_NOTIFICATION = "notification";
     public static final String KEY_RETENTION = "retention";
     public static final String KEY_STORAGE = "storage";
+    public static final String KEY_BRANDING = "branding";
+    public static final String KEY_APP_RELEASE = "app_release";
     private static final String MASK = "******";
 
     private final SystemConfigMapper configMapper;
@@ -38,6 +42,8 @@ public class SystemConfigService {
                 .notification(maskNotificationSecrets(getNotification()))
                 .retention(getRetention())
                 .storage(maskStorageSecrets(getStorage()))
+                .branding(getBranding())
+                .appRelease(getAppRelease())
                 .build();
     }
 
@@ -56,7 +62,27 @@ public class SystemConfigService {
         if (request.getStorage() != null) {
             saveStorage(mergeStorageSecrets(request.getStorage()), user.getUserId());
         }
+        if (request.getBranding() != null) {
+            saveBranding(request.getBranding(), user.getUserId());
+        }
+        if (request.getAppRelease() != null) {
+            saveAppRelease(request.getAppRelease(), user.getUserId());
+        }
         return getSettings(user);
+    }
+
+    public BrandingSettingsDto getPublicBranding() {
+        return getBranding();
+    }
+
+    public AppReleaseSettingsDto getPublicAppRelease() {
+        AppReleaseSettingsDto release = getAppRelease();
+        if (!release.isEnabled()) {
+            AppReleaseSettingsDto empty = new AppReleaseSettingsDto();
+            empty.setEnabled(false);
+            return empty;
+        }
+        return release;
     }
 
     public PublicAuthConfigVo getPublicAuthConfig() {
@@ -89,6 +115,14 @@ public class SystemConfigService {
         return read(KEY_STORAGE, StorageSettingsDto.class, defaultStorage());
     }
 
+    public BrandingSettingsDto getBranding() {
+        return read(KEY_BRANDING, BrandingSettingsDto.class, defaultBranding());
+    }
+
+    public AppReleaseSettingsDto getAppRelease() {
+        return read(KEY_APP_RELEASE, AppReleaseSettingsDto.class, defaultAppRelease());
+    }
+
     public void saveAuth(AuthSettingsDto dto, Integer userId) {
         write(KEY_AUTH, dto, userId);
     }
@@ -103,6 +137,14 @@ public class SystemConfigService {
 
     public void saveStorage(StorageSettingsDto dto, Integer userId) {
         write(KEY_STORAGE, dto, userId);
+    }
+
+    public void saveBranding(BrandingSettingsDto dto, Integer userId) {
+        write(KEY_BRANDING, dto, userId);
+    }
+
+    public void saveAppRelease(AppReleaseSettingsDto dto, Integer userId) {
+        write(KEY_APP_RELEASE, dto, userId);
     }
 
     private StorageSettingsDto mergeStorageSecrets(StorageSettingsDto incoming) {
@@ -205,5 +247,13 @@ public class SystemConfigService {
 
     private StorageSettingsDto defaultStorage() {
         return new StorageSettingsDto();
+    }
+
+    private BrandingSettingsDto defaultBranding() {
+        return new BrandingSettingsDto();
+    }
+
+    private AppReleaseSettingsDto defaultAppRelease() {
+        return new AppReleaseSettingsDto();
     }
 }

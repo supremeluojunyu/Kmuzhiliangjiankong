@@ -28,7 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,24 +49,36 @@ public class TaskExecutionService {
     private final WorkflowEngine workflowEngine;
     private final WorkflowRuntime workflowRuntime;
     private final ObjectMapper objectMapper;
+    private final PermissionService permissionService;
 
     public PageResult<MyTaskVo> listMyTasks(LoginUser user, long page, long pageSize, String filter) {
         if (user.getCurrentGroupId() == null) {
             throw new BusinessException(403, "请先选择身份组");
         }
 
-        LambdaQueryWrapper<TaskInstance> wrapper = new LambdaQueryWrapper<TaskInstance>()
-                .eq(TaskInstance::getAssignedToUserId, user.getUserId())
-                .eq(TaskInstance::getTargetGroupId, user.getCurrentGroupId())
-                .orderByDesc(TaskInstance::getCreatedAt);
+        Set<Integer> instanceIds = new LinkedHashSet<>();
 
-        if ("pending".equals(filter) || "in_progress".equals(filter)) {
-            wrapper.in(TaskInstance::getStatus, List.of("pending", "in_progress", "overdue"));
-        } else if ("completed".equals(filter)) {
-            wrapper.eq(TaskInstance::getStatus, "completed");
-        } else if ("overdue".equals(filter)) {
-            wrapper.eq(TaskInstance::getStatus, "overdue");
+        LambdaQueryWrapper<TaskInstance> statusWrapper = new LambdaQueryWrapper<TaskInstance>()
+                .orderByDesc(TaskInstance::getCreatedAt);
+        applyInstanceStatusFilter(statusWrapper, filter);
+
+        if (canViewAllNodes(user)) {
+            instanceMapper.selectList(statusWrapper).forEach(i -> instanceIds.add(i.getId()));
+        } else {
+            for (TaskInstance instance : instanceMapper.selectList(statusWrapper)) {
+                if (isInstanceVisibleToUser(user, instance)) {
+                    instanceIds.add(instance.getId());
+                }
+            }
         }
+
+        if (instanceIds.isEmpty()) {
+            return new PageResult<>(List.of(), 0, page, pageSize);
+        }
+
+        LambdaQueryWrapper<TaskInstance> wrapper = new LambdaQueryWrapper<TaskInstance>()
+                .in(TaskInstance::getId, instanceIds)
+                .orderByDesc(TaskInstance::getCreatedAt);
 
         long total = instanceMapper.selectCount(wrapper);
         long offset = (page - 1) * pageSize;
@@ -70,7 +86,7 @@ public class TaskExecutionService {
         List<TaskInstance> instances = instanceMapper.selectList(wrapper);
 
         List<MyTaskVo> list = instances.stream()
-                .map(this::toMyTaskVo)
+                .map(i -> toMyTaskVo(i, user))
                 .toList();
 
         return new PageResult<>(list, total, page, pageSize);
@@ -78,7 +94,7 @@ public class TaskExecutionService {
 
     public MyTaskVo getInstanceDetail(LoginUser user, Integer instanceId) {
         TaskInstance instance = requireAccessibleInstance(user, instanceId);
-        return toMyTaskVoDetail(instance);
+        return toMyTaskVoDetail(instance, user);
     }
 
     @Transactional
@@ -89,6 +105,7 @@ public class TaskExecutionService {
         }
 
         TaskDefinition task = taskMapper.selectById(instance.getTaskDefinitionId());
+        requireTaskRunnable(task);
         TaskFlowConfig config = workflowEngine.parseJson(task.getConfigJson());
         FlowNode nodeDef = workflowRuntime.getNode(config, nodeId);
         if (nodeDef == null) {
@@ -121,7 +138,7 @@ public class TaskExecutionService {
         if (isDraft) {
             record.setStatus("draft");
             nodeRecordMapper.updateById(record);
-            return toMyTaskVoDetail(instance);
+            return toMyTaskVoDetail(instance, user);
         }
 
         validateSubmit(nodeDef, request.getSubmitData());
@@ -131,7 +148,7 @@ public class TaskExecutionService {
         nodeRecordMapper.updateById(record);
 
         advanceWorkflow(instance, config);
-        return toMyTaskVoDetail(instanceMapper.selectById(instanceId));
+        return toMyTaskVoDetail(instanceMapper.selectById(instanceId), user);
     }
 
     private void validateSubmit(FlowNode nodeDef, Map<String, Object> data) {
@@ -195,49 +212,240 @@ public class TaskExecutionService {
         instanceMapper.updateById(instance);
     }
 
+    private void applyInstanceStatusFilter(LambdaQueryWrapper<TaskInstance> wrapper, String filter) {
+        if ("pending".equals(filter) || "in_progress".equals(filter)) {
+            wrapper.in(TaskInstance::getStatus, List.of("pending", "in_progress", "overdue"));
+        } else if ("completed".equals(filter)) {
+            wrapper.eq(TaskInstance::getStatus, "completed");
+        } else if ("overdue".equals(filter)) {
+            wrapper.eq(TaskInstance::getStatus, "overdue");
+        }
+    }
+
+    private boolean canViewAllNodes(LoginUser user) {
+        return permissionService.hasPermission(user, "stat:view_all")
+                || permissionService.hasPermission(user, "system:config");
+    }
+
+    private boolean isInstanceVisibleToUser(LoginUser user, TaskInstance instance) {
+        if (canViewAllNodes(user)) {
+            return true;
+        }
+        Integer groupId = user.getCurrentGroupId();
+        TaskFlowConfig config = loadFlowConfig(instance.getTaskDefinitionId());
+        if (config == null || !groupInFlow(config, groupId)) {
+            return false;
+        }
+        if (hasActiveNodeForGroup(instance, groupId)) {
+            if (instance.getAssignedToUserId().equals(user.getUserId())) {
+                return true;
+            }
+            FlowNode active = findActiveNodeDef(config, loadNodeRecords(instance.getId()), groupId);
+            if (active != null && isDownstreamNode(config, active)) {
+                return true;
+            }
+        }
+        if (instance.getAssignedToUserId().equals(user.getUserId())
+                && instance.getTargetGroupId().equals(groupId)) {
+            return hasGroupParticipation(instance, config, groupId);
+        }
+        return false;
+    }
+
+    private boolean isDownstreamNode(TaskFlowConfig config, FlowNode node) {
+        return workflowRuntime.getEntryNodes(config).stream()
+                .noneMatch(entry -> entry.getNodeId().equals(node.getNodeId()));
+    }
+
+    private boolean groupInFlow(TaskFlowConfig config, Integer groupId) {
+        return config.getNodes().stream().anyMatch(n -> groupId.equals(n.getExecuteGroupId()));
+    }
+
+    private boolean hasGroupParticipation(TaskInstance instance, TaskFlowConfig config, Integer groupId) {
+        List<NodeRecord> records = loadNodeRecords(instance.getId());
+        for (NodeRecord record : records) {
+            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+            if (node == null || !groupId.equals(node.getExecuteGroupId())) {
+                continue;
+            }
+            if (!"pending".equals(record.getStatus())) {
+                return true;
+            }
+        }
+        return workflowRuntime.getEntryNodes(config).stream()
+                .anyMatch(n -> groupId.equals(n.getExecuteGroupId()));
+    }
+
+    private TaskFlowConfig loadFlowConfig(Integer taskDefinitionId) {
+        TaskDefinition task = taskMapper.selectById(taskDefinitionId);
+        if (task == null) {
+            return null;
+        }
+        return workflowEngine.parseJson(task.getConfigJson());
+    }
+
+    private List<NodeRecord> loadNodeRecords(Integer instanceId) {
+        return nodeRecordMapper.selectList(new LambdaQueryWrapper<NodeRecord>()
+                .eq(NodeRecord::getTaskInstanceId, instanceId));
+    }
+
     private TaskInstance requireAccessibleInstance(LoginUser user, Integer instanceId) {
         TaskInstance instance = instanceMapper.selectById(instanceId);
         if (instance == null) {
             throw new BusinessException(404, "任务实例不存在");
         }
-        if (!instance.getAssignedToUserId().equals(user.getUserId())) {
-            throw new BusinessException(403, "无权访问该任务实例");
+        if (user.getCurrentGroupId() == null) {
+            throw new BusinessException(403, "请先选择身份组");
         }
-        if (user.getCurrentGroupId() != null
-                && !instance.getTargetGroupId().equals(user.getCurrentGroupId())) {
-            throw new BusinessException(403, "请切换到正确的身份组");
+        if (canViewAllNodes(user) || isInstanceVisibleToUser(user, instance)) {
+            return instance;
         }
-        return instance;
+        throw new BusinessException(403, "无权访问该任务实例");
     }
 
-    private MyTaskVo toMyTaskVo(TaskInstance instance) {
+    private boolean hasActiveNodeForGroup(TaskInstance instance, Integer groupId) {
+        TaskFlowConfig config = loadFlowConfig(instance.getTaskDefinitionId());
+        if (config == null) {
+            return false;
+        }
+        List<NodeRecord> records = loadNodeRecords(instance.getId());
+        for (NodeRecord record : records) {
+            if (!List.of("in_progress", "draft").contains(record.getStatus())) {
+                continue;
+            }
+            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+            if (node != null && groupId.equals(node.getExecuteGroupId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private FlowNode findActiveNodeDef(TaskFlowConfig config, List<NodeRecord> records, Integer groupId) {
+        for (NodeRecord record : records) {
+            if (!List.of("in_progress", "draft").contains(record.getStatus())) {
+                continue;
+            }
+            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+            if (node != null && groupId.equals(node.getExecuteGroupId())) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    private Set<String> upstreamNodeIds(TaskFlowConfig config, String nodeId) {
+        Set<String> result = new LinkedHashSet<>();
+        Deque<String> queue = new ArrayDeque<>();
+        FlowNode node = workflowRuntime.getNode(config, nodeId);
+        if (node != null && node.getDependsOn() != null) {
+            queue.addAll(node.getDependsOn());
+        }
+        while (!queue.isEmpty()) {
+            String id = queue.removeFirst();
+            if (!result.add(id)) {
+                continue;
+            }
+            FlowNode upstream = workflowRuntime.getNode(config, id);
+            if (upstream != null && upstream.getDependsOn() != null) {
+                queue.addAll(upstream.getDependsOn());
+            }
+        }
+        return result;
+    }
+
+    private List<NodeRecordVo> collectReferenceMaterials(
+            TaskFlowConfig config, List<NodeRecord> records, FlowNode activeNode) {
+        if (activeNode == null || !List.of("score", "approve", "view").contains(activeNode.getNodeType())) {
+            return List.of();
+        }
+        Set<String> upstream = upstreamNodeIds(config, activeNode.getNodeId());
+        List<NodeRecordVo> materials = new ArrayList<>();
+        for (NodeRecord record : records) {
+            if (!upstream.contains(record.getNodeId()) || !"completed".equals(record.getStatus())) {
+                continue;
+            }
+            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+            if (node == null || !List.of("submit", "view").contains(node.getNodeType())) {
+                continue;
+            }
+            materials.add(toNodeRecordVo(record, config));
+        }
+        return materials;
+    }
+
+    private void applyCurrentNodeForUser(
+            MyTaskVo vo, TaskInstance instance, TaskFlowConfig config, LoginUser user, List<NodeRecord> records) {
+        if (canViewAllNodes(user)) {
+            FlowNode currentNode = instance.getCurrentNodeId() != null
+                    ? workflowRuntime.getNode(config, instance.getCurrentNodeId()) : null;
+            if (currentNode != null) {
+                vo.setCurrentNodeId(currentNode.getNodeId());
+                vo.setCurrentNodeName(currentNode.getNodeName());
+                vo.setCurrentNodeType(currentNode.getNodeType());
+            }
+            return;
+        }
+        Integer groupId = user.getCurrentGroupId();
+        FlowNode active = findActiveNodeDef(config, records, groupId);
+        if (active != null) {
+            vo.setCurrentNodeId(active.getNodeId());
+            vo.setCurrentNodeName(active.getNodeName());
+            vo.setCurrentNodeType(active.getNodeType());
+            return;
+        }
+        for (NodeRecord record : records) {
+            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+            if (node != null && groupId.equals(node.getExecuteGroupId()) && "completed".equals(record.getStatus())) {
+                vo.setCurrentNodeId(node.getNodeId());
+                vo.setCurrentNodeName(node.getNodeName());
+                vo.setCurrentNodeType(node.getNodeType());
+            }
+        }
+    }
+
+    private MyTaskVo toMyTaskVo(TaskInstance instance, LoginUser user) {
         TaskDefinition task = taskMapper.selectById(instance.getTaskDefinitionId());
         TaskFlowConfig config = task != null ? workflowEngine.parseJson(task.getConfigJson()) : null;
-        FlowNode currentNode = config != null && instance.getCurrentNodeId() != null
-                ? workflowRuntime.getNode(config, instance.getCurrentNodeId()) : null;
+        List<NodeRecord> records = loadNodeRecords(instance.getId());
 
-        return MyTaskVo.builder()
+        MyTaskVo vo = MyTaskVo.builder()
                 .instanceId(instance.getId())
                 .taskId(instance.getTaskDefinitionId())
                 .taskName(task != null ? task.getTaskName() : null)
                 .status(instance.getStatus())
-                .currentNodeId(instance.getCurrentNodeId())
-                .currentNodeName(currentNode != null ? currentNode.getNodeName() : null)
-                .currentNodeType(currentNode != null ? currentNode.getNodeType() : null)
                 .createdAt(instance.getCreatedAt())
                 .completedAt(instance.getCompletedAt())
+                .fullView(canViewAllNodes(user))
                 .build();
+        if (config != null) {
+            applyCurrentNodeForUser(vo, instance, config, user, records);
+        }
+        return vo;
     }
 
-    private MyTaskVo toMyTaskVoDetail(TaskInstance instance) {
-        MyTaskVo vo = toMyTaskVo(instance);
-        TaskDefinition task = taskMapper.selectById(instance.getTaskDefinitionId());
-        TaskFlowConfig config = task != null ? workflowEngine.parseJson(task.getConfigJson()) : null;
+    private MyTaskVo toMyTaskVoDetail(TaskInstance instance, LoginUser user) {
+        MyTaskVo vo = toMyTaskVo(instance, user);
+        TaskFlowConfig config = loadFlowConfig(instance.getTaskDefinitionId());
+        List<NodeRecord> records = loadNodeRecords(instance.getId());
+        if (config == null) {
+            return vo;
+        }
 
-        List<NodeRecord> records = nodeRecordMapper.selectList(
-                new LambdaQueryWrapper<NodeRecord>().eq(NodeRecord::getTaskInstanceId, instance.getId()));
+        List<NodeRecordVo> allRecords = records.stream()
+                .map(r -> toNodeRecordVo(r, config))
+                .toList();
+        if (canViewAllNodes(user)) {
+            vo.setNodeRecords(allRecords);
+            return vo;
+        }
 
-        vo.setNodeRecords(records.stream().map(r -> toNodeRecordVo(r, config)).toList());
+        Integer groupId = user.getCurrentGroupId();
+        vo.setNodeRecords(allRecords.stream()
+                .filter(r -> groupId.equals(r.getExecuteGroupId()))
+                .toList());
+        FlowNode activeNode = findActiveNodeDef(config, records, groupId);
+        vo.setReferenceMaterials(collectReferenceMaterials(config, records, activeNode));
         return vo;
     }
 
@@ -271,5 +479,17 @@ public class TaskExecutionService {
         }
         UserGroupEntity group = groupMapper.selectById(groupId);
         return group != null ? group.getGroupName() : null;
+    }
+
+    private void requireTaskRunnable(TaskDefinition task) {
+        if (task == null) {
+            throw new BusinessException(404, "任务不存在");
+        }
+        if ("paused".equals(task.getStatus())) {
+            throw new BusinessException(400, "任务已暂停，暂无法提交");
+        }
+        if ("closed".equals(task.getStatus())) {
+            throw new BusinessException(400, "任务已停止");
+        }
     }
 }

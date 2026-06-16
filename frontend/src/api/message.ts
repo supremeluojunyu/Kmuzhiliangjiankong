@@ -1,6 +1,18 @@
 import api from './client';
 import type { ApiResponse, MessageItem, PageResult } from '@/types';
 
+export interface MessageSendTargetUser {
+  userId: number;
+  name: string;
+  account: string;
+}
+
+export interface MessageSendTargetGroup {
+  groupId: number;
+  groupName: string;
+  users: MessageSendTargetUser[];
+}
+
 export async function fetchMessages(page = 1, pageSize = 20) {
   const { data } = await api.get<ApiResponse<PageResult<MessageItem>>>('/messages', {
     params: { page, pageSize },
@@ -13,12 +25,18 @@ export async function fetchUnreadCount() {
   return data.data.count;
 }
 
+export async function fetchSendTargets() {
+  const { data } = await api.get<ApiResponse<MessageSendTargetGroup[]>>('/messages/send-targets');
+  return data.data;
+}
+
 export async function sendMessage(payload: {
   title: string;
   content?: string;
   messageType?: string;
   taskId?: number;
-  targetGroupIds: number[];
+  targetGroupIds?: number[];
+  targetUserIds?: number[];
 }) {
   const { data } = await api.post<ApiResponse<MessageItem>>('/messages', payload);
   return data.data;
@@ -30,4 +48,56 @@ export async function markMessageRead(messageId: number) {
 
 export async function markAllMessagesRead() {
   await api.post('/messages/read-all');
+}
+
+/** 树形选择值：g-{groupId} 整组，u-{userId} 个人 */
+export function parseSendTargets(values: string[]): {
+  targetGroupIds: number[];
+  targetUserIds: number[];
+} {
+  const targetGroupIds: number[] = [];
+  const targetUserIds: number[] = [];
+  for (const v of values) {
+    if (v.startsWith('g-')) {
+      targetGroupIds.push(Number(v.slice(2)));
+    } else if (v.startsWith('u-')) {
+      targetUserIds.push(Number(v.slice(2)));
+    }
+  }
+  return { targetGroupIds, targetUserIds };
+}
+
+export function buildSendTargetTree(groups: MessageSendTargetGroup[]) {
+  return groups.map((g) => ({
+    title: g.groupName,
+    value: `g-${g.groupId}`,
+    key: `g-${g.groupId}`,
+    children: g.users.map((u) => ({
+      title: `${u.name}（${u.account}）`,
+      value: `u-${u.userId}`,
+      key: `u-${g.groupId}-${u.userId}`,
+    })),
+  }));
+}
+
+export function describeSendTargets(
+  groups: MessageSendTargetGroup[],
+  targetGroupIds: number[],
+  targetUserIds: number[],
+): string {
+  const parts: string[] = [];
+  for (const gid of targetGroupIds) {
+    const g = groups.find((x) => x.groupId === gid);
+    parts.push(g ? `组「${g.groupName}」全员` : `组 #${gid}`);
+  }
+  for (const uid of targetUserIds) {
+    for (const g of groups) {
+      const u = g.users.find((x) => x.userId === uid);
+      if (u) {
+        parts.push(u.name);
+        break;
+      }
+    }
+  }
+  return parts.join('、') || '所选对象';
 }

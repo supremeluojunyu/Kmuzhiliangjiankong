@@ -9,6 +9,11 @@ frontend/dist/
 # 数据与上传
 data/uploads/*
 !data/uploads/.gitkeep
+data/apk/*
+!data/apk/.gitkeep
+
+# TypeScript 构建缓存
+*.tsbuildinfo
 
 # 环境
 .env

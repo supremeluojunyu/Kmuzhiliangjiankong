@@ -3,15 +3,19 @@ package com.uqm.service;
 import com.uqm.common.BusinessException;
 import com.uqm.common.PageResult;
 import com.uqm.dto.MessageRow;
+import com.uqm.dto.MessageSendTargetUserVo;
+import com.uqm.dto.MessageSendTargetVo;
 import com.uqm.dto.MessageVo;
 import com.uqm.dto.SendMessageRequest;
 import com.uqm.entity.Message;
+import com.uqm.entity.User;
+import com.uqm.entity.UserGroupEntity;
 import com.uqm.mapper.MessageMapper;
 import com.uqm.mapper.MessageReadStatusMapper;
 import com.uqm.mapper.MessageTargetGroupMapper;
+import com.uqm.mapper.MessageTargetUserMapper;
 import com.uqm.mapper.UserGroupQueryMapper;
 import com.uqm.mapper.UserMapper;
-import com.uqm.entity.User;
 import com.uqm.security.LoginUser;
 import com.uqm.util.HtmlSanitizer;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +23,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +34,7 @@ public class MessageService {
 
     private final MessageMapper messageMapper;
     private final MessageTargetGroupMapper targetGroupMapper;
+    private final MessageTargetUserMapper targetUserMapper;
     private final MessageReadStatusMapper readStatusMapper;
     private final PermissionService permissionService;
     private final HtmlSanitizer htmlSanitizer;
@@ -34,6 +42,7 @@ public class MessageService {
     private final SystemConfigService systemConfigService;
     private final UserGroupQueryMapper userGroupQueryMapper;
     private final UserMapper userMapper;
+    private final GroupService groupService;
 
     public PageResult<MessageVo> listMessages(LoginUser user, long page, long pageSize) {
         long offset = (page - 1) * pageSize;
@@ -51,9 +60,42 @@ public class MessageService {
         return messageMapper.countUnreadAllGroups(user.getUserId());
     }
 
+    public List<MessageSendTargetVo> listSendTargets(LoginUser user) {
+        permissionService.requirePermission(user, "message:send");
+        List<MessageSendTargetVo> result = new ArrayList<>();
+        for (UserGroupEntity group : groupService.listAll()) {
+            List<MessageSendTargetUserVo> users = userGroupQueryMapper
+                    .listUsersInGroup(group.getGroupId(), null)
+                    .stream()
+                    .map(u -> MessageSendTargetUserVo.builder()
+                            .userId(u.getUserId())
+                            .name(u.getName())
+                            .account(u.getAccount())
+                            .build())
+                    .toList();
+            result.add(MessageSendTargetVo.builder()
+                    .groupId(group.getGroupId())
+                    .groupName(group.getGroupName())
+                    .users(users)
+                    .build());
+        }
+        return result;
+    }
+
     @Transactional
     public MessageVo sendMessage(LoginUser user, SendMessageRequest request) {
         permissionService.requirePermission(user, "message:send");
+
+        List<Integer> groupIds = request.getTargetGroupIds() != null
+                ? request.getTargetGroupIds().stream().distinct().toList()
+                : List.of();
+        List<Integer> userIds = request.getTargetUserIds() != null
+                ? request.getTargetUserIds().stream().distinct().toList()
+                : List.of();
+
+        if (groupIds.isEmpty() && userIds.isEmpty()) {
+            throw new BusinessException(400, "至少选择一个接收对象（组或个人）");
+        }
 
         Message message = new Message();
         message.setSenderId(user.getUserId());
@@ -65,12 +107,18 @@ public class MessageService {
         message.setSendTime(LocalDateTime.now());
         messageMapper.insert(message);
 
-        targetGroupMapper.batchInsert(message.getMessageId(), request.getTargetGroupIds());
+        if (!groupIds.isEmpty()) {
+            targetGroupMapper.batchInsert(message.getMessageId(), groupIds);
+        }
+        if (!userIds.isEmpty()) {
+            targetUserMapper.batchInsert(message.getMessageId(), userIds);
+        }
 
-        notifyBroadcastTargets(message.getTitle(), message.getContent(), request.getTargetGroupIds());
+        notifyTargets(message.getTitle(), message.getContent(), groupIds, userIds);
 
         MessageVo vo = toVoFromEntity(message);
         vo.setTargetGroupNames(messageMapper.listTargetGroupNames(message.getMessageId()));
+        vo.setTargetUserNames(messageMapper.listTargetUserNames(message.getMessageId()));
         return vo;
     }
 
@@ -112,6 +160,7 @@ public class MessageService {
                 .isRead(row.getIsRead() != null && row.getIsRead() == 1)
                 .build();
         vo.setTargetGroupNames(messageMapper.listTargetGroupNames(row.getMessageId()));
+        vo.setTargetUserNames(messageMapper.listTargetUserNames(row.getMessageId()));
         return vo;
     }
 
@@ -129,22 +178,29 @@ public class MessageService {
                 .build();
     }
 
-    private void notifyBroadcastTargets(String title, String content, List<Integer> groupIds) {
+    private void notifyTargets(String title, String content, List<Integer> groupIds, List<Integer> userIds) {
         if (!systemConfigService.getNotification().isNotifyOnMessageBroadcast()) {
             return;
         }
-        java.util.Set<Integer> notified = new java.util.HashSet<>();
+        Set<Integer> notified = new HashSet<>();
         for (Integer groupId : groupIds) {
             userGroupQueryMapper.listUsersInGroup(groupId, null).forEach(item -> {
-                if (!notified.add(item.getUserId())) {
-                    return;
-                }
-                User user = userMapper.selectById(item.getUserId());
-                if (user == null) {
-                    return;
-                }
-                notificationService.notifyBroadcast(title, content, user.getEmail(), user.getWechatUserId());
+                notifyUser(notified, item.getUserId(), title, content);
             });
         }
+        for (Integer userId : userIds) {
+            notifyUser(notified, userId, title, content);
+        }
+    }
+
+    private void notifyUser(Set<Integer> notified, Integer userId, String title, String content) {
+        if (!notified.add(userId)) {
+            return;
+        }
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return;
+        }
+        notificationService.notifyBroadcast(title, content, user.getEmail(), user.getWechatUserId());
     }
 }

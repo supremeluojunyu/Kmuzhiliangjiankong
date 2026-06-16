@@ -1,7 +1,6 @@
 package com.uqm.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import lombok.Data;
 
 import java.util.List;
@@ -14,6 +13,8 @@ public class SendMessageRequest {
     private String messageType = "broadcast";
     private Integer taskId;
     private Integer instanceId;
-    @NotEmpty(message = "至少选择一个目标组")
+    /** 选中组时：组内全员接收 */
     private List<Integer> targetGroupIds;
+    /** 选中个人时：仅该用户接收 */
+    private List<Integer> targetUserIds;
 }

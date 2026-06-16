@@ -20,4 +20,5 @@ public class MessageVo {
     private LocalDateTime sendTime;
     private Boolean isRead;
     private List<String> targetGroupNames;
+    private List<String> targetUserNames;
 }

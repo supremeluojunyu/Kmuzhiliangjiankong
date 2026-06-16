@@ -42,6 +42,8 @@ export interface MyTaskItem {
   createdAt: string;
   completedAt?: string;
   nodeRecords?: NodeRecordItem[];
+  referenceMaterials?: NodeRecordItem[];
+  fullView?: boolean;
 }
 
 export async function fetchTasks(page = 1, pageSize = 20, status?: string) {
@@ -75,6 +77,21 @@ export async function updateTask(
 
 export async function publishTask(taskId: number) {
   const { data } = await api.post<ApiResponse<TaskItem>>(`/task/publish/${taskId}`);
+  return data.data;
+}
+
+export async function pauseTask(taskId: number) {
+  const { data } = await api.post<ApiResponse<TaskItem>>(`/task/${taskId}/pause`);
+  return data.data;
+}
+
+export async function resumeTask(taskId: number) {
+  const { data } = await api.post<ApiResponse<TaskItem>>(`/task/${taskId}/resume`);
+  return data.data;
+}
+
+export async function stopTask(taskId: number) {
+  const { data } = await api.post<ApiResponse<TaskItem>>(`/task/${taskId}/stop`);
   return data.data;
 }
 

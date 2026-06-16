@@ -119,4 +119,25 @@ public class TaskController {
             @PathVariable Integer taskId) {
         return ApiResponse.ok(taskService.publishTask(user, taskId));
     }
+
+    @PostMapping("/{taskId}/pause")
+    public ApiResponse<TaskVo> pause(
+            @AuthenticationPrincipal LoginUser user,
+            @PathVariable Integer taskId) {
+        return ApiResponse.ok(taskService.pauseTask(user, taskId));
+    }
+
+    @PostMapping("/{taskId}/resume")
+    public ApiResponse<TaskVo> resume(
+            @AuthenticationPrincipal LoginUser user,
+            @PathVariable Integer taskId) {
+        return ApiResponse.ok(taskService.resumeTask(user, taskId));
+    }
+
+    @PostMapping("/{taskId}/stop")
+    public ApiResponse<TaskVo> stop(
+            @AuthenticationPrincipal LoginUser user,
+            @PathVariable Integer taskId) {
+        return ApiResponse.ok(taskService.stopTask(user, taskId));
+    }
 }

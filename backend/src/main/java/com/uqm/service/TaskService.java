@@ -17,6 +17,7 @@ import com.uqm.workflow.WorkflowEngine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -29,6 +30,8 @@ public class TaskService {
     private final PermissionService permissionService;
     private final HtmlSanitizer htmlSanitizer;
     private final TaskPublishNotifier taskPublishNotifier;
+    private final TaskFlowSyncService taskFlowSyncService;
+    private final OperationLogService operationLogService;
 
     public PageResult<TaskVo> listTasks(LoginUser user, long page, long pageSize, String status) {
         LambdaQueryWrapper<TaskDefinition> wrapper = new LambdaQueryWrapper<TaskDefinition>()
@@ -76,7 +79,7 @@ public class TaskService {
     @Transactional
     public TaskVo updateTask(LoginUser user, Integer taskId, CreateTaskRequest request) {
         permissionService.requirePermission(user, "task:config");
-        TaskDefinition task = requireDraft(taskId);
+        TaskDefinition task = requireEditable(taskId);
 
         task.setTaskName(request.getTaskName());
         task.setDescription(htmlSanitizer.sanitize(request.getDescription()));
@@ -84,8 +87,12 @@ public class TaskService {
             workflowEngine.validate(request.getFlowConfig());
             request.getFlowConfig().setTaskId(taskId);
             task.setConfigJson(workflowEngine.toJson(request.getFlowConfig()));
+            if ("paused".equals(task.getStatus())) {
+                taskFlowSyncService.syncActiveInstances(taskId, request.getFlowConfig());
+            }
         }
         taskMapper.updateById(task);
+        operationLogService.log(user, "task:update", "task", taskId, null);
         return toVo(task);
     }
 
@@ -109,6 +116,64 @@ public class TaskService {
         taskPublishNotifier.notifyTaskPublished(task);
 
         return toVo(task);
+    }
+
+    @Transactional
+    public TaskVo pauseTask(LoginUser user, Integer taskId) {
+        permissionService.requirePermission(user, "task:config");
+        TaskDefinition task = requireTask(taskId);
+        if (!List.of("published", "in_progress").contains(task.getStatus())) {
+            throw new BusinessException(400, "仅已发布或进行中的任务可暂停");
+        }
+        task.setStatus("paused");
+        taskMapper.updateById(task);
+        operationLogService.log(user, "task:pause", "task", taskId, null);
+        return toVo(task);
+    }
+
+    @Transactional
+    public TaskVo resumeTask(LoginUser user, Integer taskId) {
+        permissionService.requirePermission(user, "task:config");
+        TaskDefinition task = requireTask(taskId);
+        if (!"paused".equals(task.getStatus())) {
+            throw new BusinessException(400, "仅已暂停的任务可恢复运行");
+        }
+        TaskFlowConfig config = workflowEngine.parseJson(task.getConfigJson());
+        workflowEngine.validate(config);
+        task.setStatus(taskFlowSyncService.hasActiveInstances(taskId) ? "in_progress" : "published");
+        taskMapper.updateById(task);
+        operationLogService.log(user, "task:resume", "task", taskId, null);
+        return toVo(task);
+    }
+
+    @Transactional
+    public TaskVo stopTask(LoginUser user, Integer taskId) {
+        permissionService.requirePermission(user, "task:config");
+        TaskDefinition task = requireTask(taskId);
+        if (!List.of("published", "in_progress", "paused").contains(task.getStatus())) {
+            throw new BusinessException(400, "当前状态的任务不可停止");
+        }
+        taskFlowSyncService.closeActiveInstances(taskId);
+        task.setStatus("closed");
+        taskMapper.updateById(task);
+        operationLogService.log(user, "task:stop", "task", taskId, null);
+        return toVo(task);
+    }
+
+    private TaskDefinition requireTask(Integer taskId) {
+        TaskDefinition task = taskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BusinessException(404, "任务不存在");
+        }
+        return task;
+    }
+
+    private TaskDefinition requireEditable(Integer taskId) {
+        TaskDefinition task = requireTask(taskId);
+        if (!List.of("draft", "paused").contains(task.getStatus())) {
+            throw new BusinessException(400, "仅草稿或已暂停的任务可编辑配置");
+        }
+        return task;
     }
 
     private TaskDefinition requireDraft(Integer taskId) {

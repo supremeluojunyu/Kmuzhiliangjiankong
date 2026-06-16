@@ -52,6 +52,7 @@ export interface MessageItem {
   sendTime: string;
   isRead: boolean;
   targetGroupNames?: string[];
+  targetUserNames?: string[];
 }
 
 export interface FlowNode {

@@ -1,4 +1,4 @@
-import { ArrowLeftOutlined, CheckOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckOutlined, DownloadOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -17,7 +17,8 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { uploadFile } from '@/api/file';
+import { uploadFile, batchDownloadFiles } from '@/api/file';
+import MaterialViewer from '@/components/MaterialViewer';
 import {
   fetchInstance,
   fetchInstanceComments,
@@ -40,7 +41,8 @@ const nodeTypeLabel: Record<string, string> = {
 export default function TaskExecutePage() {
   const { instanceId } = useParams();
   const navigate = useNavigate();
-  const { currentGroupId } = useAuth();
+  const { currentGroupId, hasPermission } = useAuth();
+  const canViewAll = hasPermission('stat:view_all') || hasPermission('system:config');
   const [task, setTask] = useState<MyTaskItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +50,7 @@ export default function TaskExecutePage() {
   const [comments, setComments] = useState<TaskCommentItem[]>([]);
   const [commentHtml, setCommentHtml] = useState('');
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const [allDownloadLoading, setAllDownloadLoading] = useState(false);
   const [form] = Form.useForm();
 
   const loadComments = async () => {
@@ -79,6 +82,7 @@ export default function TaskExecutePage() {
           response: { filePath: f.path, fileName: f.name },
         })));
       } else {
+        form.resetFields();
         setFileList([]);
       }
     } catch {
@@ -91,29 +95,46 @@ export default function TaskExecutePage() {
 
   useEffect(() => {
     load();
-  }, [instanceId]);
+    const onIdentity = () => load();
+    window.addEventListener('identity-changed', onIdentity);
+    return () => window.removeEventListener('identity-changed', onIdentity);
+  }, [instanceId, currentGroupId]);
 
-  const activeNode = task?.nodeRecords?.find(
+  const visibleNodes = task?.fullView || canViewAll
+    ? (task?.nodeRecords || [])
+    : (task?.nodeRecords || []);
+
+  const activeNode = visibleNodes.find(
     (n) =>
       (n.status === 'in_progress' || n.status === 'draft')
-      && n.executeGroupId === currentGroupId
+      && (task?.fullView || canViewAll || n.executeGroupId === currentGroupId)
   );
 
-  const waitingOnOtherGroup = !activeNode && task?.nodeRecords?.some(
-    (n) => (n.status === 'in_progress' || n.status === 'draft')
-      && n.executeGroupId !== currentGroupId
-  );
+  const waitingOnOtherGroup = !activeNode
+    && !task?.fullView
+    && !canViewAll
+    && task?.status !== 'completed'
+    && visibleNodes.some((n) => n.status === 'completed')
+    && !visibleNodes.some((n) => n.status === 'in_progress' || n.status === 'draft');
 
-  const waitingNode = task?.nodeRecords?.find(
-    (n) => (n.status === 'in_progress' || n.status === 'draft')
-      && n.executeGroupId !== currentGroupId
-  );
+  const referenceMaterials = task?.referenceMaterials || [];
+
+  const allReferenceFiles = referenceMaterials.flatMap((mat) => {
+    const files = (mat.submitData?.files as { name: string; path: string }[]) || [];
+    return files;
+  });
 
   const handleSubmit = async (draft = false) => {
     if (!activeNode) return;
     let values: Record<string, unknown> = {};
     if (activeNode.nodeType === 'view') {
       values = { viewed: true };
+    } else if (activeNode.nodeType === 'score') {
+      values = await form.validateFields();
+      const scoreMode = activeNode.config?.scoreMode === 'grade' ? 'grade' : 'numeric';
+      if (scoreMode === 'numeric' && values.score != null && values.score !== '') {
+        values.score = Number(values.score);
+      }
     } else if (draft) {
       values = { ...form.getFieldsValue(), files: collectFiles() };
     } else {
@@ -163,8 +184,8 @@ export default function TaskExecutePage() {
     return <Typography.Text>加载中...</Typography.Text>;
   }
 
-  const stepItems = (task.nodeRecords || []).map((n) => {
-    const isMine = n.executeGroupId === currentGroupId;
+  const stepItems = visibleNodes.map((n) => {
+    const isMine = task?.fullView || canViewAll || n.executeGroupId === currentGroupId;
     const typeLabel = nodeTypeLabel[n.nodeType] || n.nodeType;
     const groupHint = n.executeGroupName ? ` · ${n.executeGroupName}` : '';
     return {
@@ -193,6 +214,49 @@ export default function TaskExecutePage() {
       <Card title="流程进度" style={{ marginBottom: 16 }}>
         <Steps direction="vertical" size="small" items={stepItems} />
       </Card>
+
+      {referenceMaterials.length > 0 && (
+        <Card
+          title="待审材料"
+          style={{ marginBottom: 16 }}
+          extra={
+            allReferenceFiles.length > 0 ? (
+              <Button
+                icon={<DownloadOutlined />}
+                loading={allDownloadLoading}
+                onClick={async () => {
+                  setAllDownloadLoading(true);
+                  try {
+                    await batchDownloadFiles(allReferenceFiles, `${task.taskName}-全部材料`);
+                    message.success('已开始下载');
+                  } catch (e) {
+                    message.error(e instanceof Error ? e.message : '下载失败');
+                  } finally {
+                    setAllDownloadLoading(false);
+                  }
+                }}
+              >
+                全部打包下载
+              </Button>
+            ) : null
+          }
+        >
+          {referenceMaterials.map((mat) => {
+            const files = (mat.submitData?.files as { name: string; path: string }[]) || [];
+            const remark = mat.submitData?.remark as string | undefined;
+            return (
+              <div key={mat.nodeId} style={{ marginBottom: referenceMaterials.length > 1 ? 24 : 0 }}>
+                <MaterialViewer
+                  title={mat.nodeName || mat.nodeId}
+                  remark={remark}
+                  files={files}
+                  zipName={`${task.taskName}-${mat.nodeName || '材料'}`}
+                />
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
       {activeNode && task.status !== 'completed' ? (
         <Card title={`执行：${activeNode.nodeName}（${nodeTypeLabel[activeNode.nodeType]}）`}>
@@ -240,7 +304,14 @@ export default function TaskExecutePage() {
                 </>
               ) : (
                 <>
-                  <Form.Item name="score" label="评分（0–100）" rules={[{ required: true }]}>
+                  <Form.Item
+                    name="score"
+                    label="评分（0–100）"
+                    rules={[
+                      { required: true, message: '请填写评分' },
+                      { type: 'number', min: 0, max: 100, message: '评分须在 0–100 之间' },
+                    ]}
+                  >
                     <InputNumber min={0} max={100} style={{ width: 200 }} />
                   </Form.Item>
                   <Form.Item name="comment" label="评语">
@@ -282,10 +353,7 @@ export default function TaskExecutePage() {
       ) : waitingOnOtherGroup ? (
         <Card>
           <Typography.Text type="secondary">
-            当前流程节点「{waitingNode?.nodeName || waitingNode?.nodeId}」（
-            {nodeTypeLabel[waitingNode?.nodeType || ''] || waitingNode?.nodeType}
-            {waitingNode?.executeGroupName ? ` · ${waitingNode.executeGroupName}` : ''}
-            ）正在处理中，请等待该组完成后再查看后续进度。
+            您负责的节点已完成，请等待其他执行组处理后续流程。
           </Typography.Text>
         </Card>
       ) : task.status === 'completed' ? (

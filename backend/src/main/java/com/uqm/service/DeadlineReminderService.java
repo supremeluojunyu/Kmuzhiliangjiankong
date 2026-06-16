@@ -158,7 +158,7 @@ public class DeadlineReminderService {
             return false;
         }
 
-        String title = "【质量监控】" + titlePrefix + "：" + task.getTaskName();
+        String title = "【昆明学院质控】" + titlePrefix + "：" + task.getTaskName();
         notificationService.notifyDeadline(title, content, user.getEmail(), user.getWechatUserId());
         createSystemMessage(instance, task, user, title, content);
 

@@ -1,7 +1,22 @@
 import api from './client';
+import { nativeHttpRequest } from './capacitorHttpAdapter';
 import type { ApiResponse, College, GroupInfo, LoginResponse, UserProfile } from '@/types';
+import { isMobileApp } from '@/utils/app';
+import { getApiPrefix } from '@/utils/serverConfig';
 
 export async function login(account: string, password: string) {
+  if (isMobileApp()) {
+    const body = await nativeHttpRequest<ApiResponse<LoginResponse>>({
+      url: `${getApiPrefix()}/auth/login`,
+      method: 'POST',
+      data: { account, password },
+      timeout: 30000,
+    });
+    if (body.code !== 0) {
+      throw new Error(body.message || '登录失败');
+    }
+    return body.data;
+  }
   const { data } = await api.post<ApiResponse<LoginResponse>>('/auth/login', {
     account,
     password,

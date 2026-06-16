@@ -13,10 +13,20 @@ import {
   Switch,
   Tabs,
   Typography,
+  Upload,
   message,
 } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import { useEffect, useState } from 'react';
 import { fetchAllGroups } from '@/api/group';
+import { uploadFile } from '@/api/file';
+import {
+  DOWNLOAD_PAGE_DESCRIPTION,
+  DOWNLOAD_PAGE_TITLE,
+  SYSTEM_NAME,
+  SYSTEM_SHORT_NAME,
+  SYSTEM_SUBTITLE,
+} from '@/config/branding';
 import {
   fetchSystemSettings,
   runDeadlineRemind,
@@ -376,6 +386,146 @@ export default function SystemSettingsPage() {
                       message.error(e instanceof Error ? e.message : '连接失败');
                     }
                   }}>保存并测试连接</Button>
+                </Card>
+              ),
+            },
+            {
+              key: 'branding',
+              label: '品牌与 APP',
+              children: (
+                <Card>
+                  <Typography.Title level={5}>网站外观</Typography.Title>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'siteName']} label="系统全称">
+                        <Input placeholder={SYSTEM_NAME} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item name={['branding', 'siteShortName']} label="简称（侧边栏/APP）">
+                        <Input placeholder={SYSTEM_SHORT_NAME} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item name={['branding', 'primaryColor']} label="主题色">
+                        <Input type="color" style={{ width: '100%', height: 32, padding: 2 }} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'siteSubtitle']} label="副标题">
+                        <Input placeholder={SYSTEM_SUBTITLE} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'loginBackground']} label="登录页背景（CSS）">
+                        <Input placeholder="linear-gradient(135deg, #667eea 0%, #764ba2 100%)" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'logoUrl']} label="Logo 地址">
+                        <Input placeholder="/api/files/xxx 或 https://..." />
+                      </Form.Item>
+                      <Upload
+                        showUploadList={false}
+                        customRequest={async ({ file, onSuccess, onError }) => {
+                          try {
+                            const uploaded = await uploadFile(file as File);
+                            form.setFieldValue(['branding', 'logoUrl'], uploaded.url);
+                            message.success('Logo 已上传');
+                            onSuccess?.(uploaded);
+                          } catch (e) {
+                            message.error(e instanceof Error ? e.message : '上传失败');
+                            onError?.(e as Error);
+                          }
+                        }}
+                      >
+                        <Button icon={<UploadOutlined />}>上传 Logo</Button>
+                      </Upload>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'faviconUrl']} label="Favicon 地址">
+                        <Input placeholder="/api/files/xxx" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+                  <Typography.Title level={5}>APP 下载页</Typography.Title>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={
+                      <>
+                        公开下载页地址：
+                        <Typography.Link href="/download" target="_blank">
+                          /download
+                        </Typography.Link>
+                        （可分享二维码链接）
+                      </>
+                    }
+                  />
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'downloadPageTitle']} label="下载页标题">
+                        <Input placeholder={DOWNLOAD_PAGE_TITLE} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['branding', 'defaultServerUrl']} label="APP 默认服务器">
+                        <Input placeholder="http://124.220.4.69:5555" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item name={['branding', 'downloadPageDescription']} label="下载页说明">
+                        <Input.TextArea rows={2} placeholder={DOWNLOAD_PAGE_DESCRIPTION} />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+
+                  <Divider />
+                  <Typography.Title level={5}>APP 版本发布</Typography.Title>
+                  <Row gutter={16}>
+                    <Col span={6}>
+                      <Form.Item name={['appRelease', 'enabled']} label="启用下载" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item name={['appRelease', 'version']} label="版本号">
+                        <Input placeholder="1.0.0" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item name={['appRelease', 'versionCode']} label="版本代码">
+                        <InputNumber min={1} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item name={['appRelease', 'minAndroidVersion']} label="最低 Android">
+                        <Input placeholder="7.0" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item
+                        name={['appRelease', 'apkUrl']}
+                        label="APK 下载地址"
+                        extra="可填写 GitHub Release 资产链接，如 https://github.com/.../releases/download/v1.0.0/app-debug.apk"
+                      >
+                        <Input placeholder="https://..." />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                      <Form.Item name={['appRelease', 'publishedAt']} label="发布日期">
+                        <Input placeholder="2026-06-16" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={24}>
+                      <Form.Item name={['appRelease', 'releaseNotes']} label="更新说明">
+                        <Input.TextArea rows={4} placeholder="每行一条更新内容" />
+                      </Form.Item>
+                    </Col>
+                  </Row>
                 </Card>
               ),
             },

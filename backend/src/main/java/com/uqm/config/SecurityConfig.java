@@ -41,6 +41,7 @@ public class SecurityConfig {
                                 "/api/auth/config",
                                 "/api/auth/cas/**",
                                 "/api/auth/oauth2/**",
+                                "/api/public/**",
                                 "/api/health"
                         ).permitAll()
                         .anyRequest().authenticated()

@@ -10,13 +10,14 @@ import {
   Select,
   Space,
   Typography,
+  Alert,
   message,
 } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { fetchAllGroups } from '@/api/group';
-import { createTask, fetchTask, publishTask, updateTask } from '@/api/task';
+import { createTask, fetchTask, pauseTask, publishTask, resumeTask, stopTask, updateTask } from '@/api/task';
 import { fetchTemplate, fetchTemplates, saveTemplate, saveTemplateFromTask } from '@/api/taskTemplate';
 import RichTextEditor from '@/components/RichTextEditor';
 import RichTextView from '@/components/RichTextView';
@@ -52,7 +53,8 @@ export default function TaskEditPage() {
   const [tplForm] = Form.useForm();
   const description = Form.useWatch('description', form);
 
-  const readOnly = !isNew && status !== 'draft';
+  const readOnly = !isNew && status !== 'draft' && status !== 'paused';
+  const isPaused = status === 'paused';
 
   useEffect(() => {
     fetchAllGroups().then(setGroups).catch(() => {});
@@ -161,6 +163,42 @@ export default function TaskEditPage() {
     }
   };
 
+  const handlePause = async () => {
+    try {
+      const task = await pauseTask(Number(taskId));
+      setStatus(task.status);
+      message.success('任务已暂停，可修改流程配置');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '暂停失败');
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      if (!readOnly) {
+        await handleSave();
+      }
+      await resumeTask(Number(taskId));
+      message.success('任务已恢复运行');
+      navigate('/tasks');
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '恢复失败');
+    }
+  };
+
+  const handleStop = async () => {
+    Modal.confirm({
+      title: '确认停止任务？',
+      content: '停止后所有进行中的实例将关闭，且不可再提交。如需重新运行请创建新任务。',
+      okType: 'danger',
+      onOk: async () => {
+        await stopTask(Number(taskId));
+        message.success('任务已停止');
+        navigate('/tasks');
+      },
+    });
+  };
+
   const handleSaveAsTemplate = async () => {
     const values = await tplForm.validateFields();
     const taskValues = await form.validateFields();
@@ -193,8 +231,18 @@ export default function TaskEditPage() {
   return (
     <div>
       <Typography.Title level={4}>
-        {isNew ? '创建任务' : readOnly ? '查看任务' : '编辑任务'}
+        {isNew ? '创建任务' : isPaused ? '编辑任务（已暂停）' : readOnly ? '查看任务' : '编辑任务'}
       </Typography.Title>
+
+      {isPaused && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="任务已暂停"
+          description="可修改流程节点与时间配置。保存后点击「恢复运行」继续；进行中实例将按新流程同步未完成的节点。"
+        />
+      )}
 
       {isNew && templates.length > 0 && (
         <Card size="small" style={{ marginBottom: 16 }}>
@@ -388,16 +436,28 @@ export default function TaskEditPage() {
         {!readOnly && (
           <Space style={{ marginTop: 16 }}>
             <Button type="primary" onClick={handleSave}>
-              保存草稿
+              {isPaused ? '保存配置' : '保存草稿'}
             </Button>
-            {!isNew && hasPermission('task:create') && (
+            {!isNew && !isPaused && hasPermission('task:create') && (
               <Button onClick={handlePublish}>保存并发布</Button>
+            )}
+            {isPaused && hasPermission('task:config') && (
+              <>
+                <Button type="primary" onClick={handleResume}>恢复运行</Button>
+                <Button danger onClick={handleStop}>停止任务</Button>
+              </>
             )}
             <Button onClick={() => navigate('/tasks')}>返回</Button>
           </Space>
         )}
-        {readOnly && (
-          <Space style={{ marginTop: 16 }}>
+        {readOnly && !isNew && (
+          <Space style={{ marginTop: 16 }} wrap>
+            {['published', 'in_progress'].includes(status) && hasPermission('task:config') && (
+              <>
+                <Button onClick={handlePause}>暂停</Button>
+                <Button danger onClick={handleStop}>停止</Button>
+              </>
+            )}
             <Button onClick={() => navigate('/tasks')}>返回</Button>
           </Space>
         )}

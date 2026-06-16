@@ -10,4 +10,6 @@ public class SystemSettingsVo {
     private NotificationSettingsDto notification;
     private RetentionSettingsDto retention;
     private StorageSettingsDto storage;
+    private BrandingSettingsDto branding;
+    private AppReleaseSettingsDto appRelease;
 }

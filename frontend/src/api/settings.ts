@@ -57,11 +57,36 @@ export interface StorageSettings {
   s3PathStyleAccess?: boolean;
 }
 
+export interface BrandingSettings {
+  siteName?: string;
+  siteShortName?: string;
+  siteSubtitle?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+  primaryColor?: string;
+  loginBackground?: string;
+  downloadPageTitle?: string;
+  downloadPageDescription?: string;
+  defaultServerUrl?: string;
+}
+
+export interface AppReleaseSettings {
+  version?: string;
+  versionCode?: number;
+  apkUrl?: string;
+  releaseNotes?: string;
+  publishedAt?: string;
+  minAndroidVersion?: string;
+  enabled?: boolean;
+}
+
 export interface SystemSettings {
   auth: AuthSettings;
   notification: NotificationSettings;
   retention: RetentionSettings;
   storage: StorageSettings;
+  branding?: BrandingSettings;
+  appRelease?: AppReleaseSettings;
 }
 
 export interface PublicAuthConfig {

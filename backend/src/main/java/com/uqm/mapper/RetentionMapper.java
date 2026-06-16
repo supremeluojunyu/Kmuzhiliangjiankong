@@ -18,6 +18,9 @@ public interface RetentionMapper {
     @Delete("DELETE FROM message_target_group WHERE message_id IN (SELECT message_id FROM message WHERE send_time < #{before})")
     int deleteMessageTargetsBefore(@Param("before") LocalDateTime before);
 
+    @Delete("DELETE FROM message_target_user WHERE message_id IN (SELECT message_id FROM message WHERE send_time < #{before})")
+    int deleteMessageTargetUsersBefore(@Param("before") LocalDateTime before);
+
     @Delete("DELETE FROM message WHERE send_time < #{before}")
     int deleteMessagesBefore(@Param("before") LocalDateTime before);
 

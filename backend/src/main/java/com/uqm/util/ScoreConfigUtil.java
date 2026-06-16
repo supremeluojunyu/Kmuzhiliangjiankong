@@ -57,9 +57,20 @@ public final class ScoreConfigUtil {
     }
 
     private static double toDouble(Object val) {
+        if (val == null) {
+            throw new BusinessException(400, "请填写评分");
+        }
         if (val instanceof Number n) {
             return n.doubleValue();
         }
-        return Double.parseDouble(String.valueOf(val));
+        String text = String.valueOf(val).trim();
+        if (!StringUtils.hasText(text)) {
+            throw new BusinessException(400, "请填写评分");
+        }
+        try {
+            return Double.parseDouble(text);
+        } catch (NumberFormatException e) {
+            throw new BusinessException(400, "请填写有效评分");
+        }
     }
 }

@@ -18,6 +18,8 @@ import java.util.Properties;
 @RequiredArgsConstructor
 public class NotificationService {
 
+    private static final String NOTIFY_PREFIX = "【昆明学院质控】";
+
     private final SystemConfigService systemConfigService;
     private final RestClient restClient = RestClient.create();
 
@@ -26,7 +28,7 @@ public class NotificationService {
         if (!cfg.isNotifyOnTaskPublish()) {
             return;
         }
-        String subject = "【质量监控】新任务发布：" + taskName;
+        String subject = NOTIFY_PREFIX + "新任务发布：" + taskName;
         String body = "任务「" + taskName + "」已发布，请登录系统查看并处理。";
         sendEmail(cfg, recipientEmail, subject, body);
         sendWechat(cfg, recipientWechatUserId, subject + "\n" + body);
@@ -37,7 +39,7 @@ public class NotificationService {
         if (!cfg.isNotifyOnMessageBroadcast()) {
             return;
         }
-        sendEmail(cfg, recipientEmail, "【质量监控】" + title, content);
+        sendEmail(cfg, recipientEmail, NOTIFY_PREFIX + title, content);
         sendWechat(cfg, recipientWechatUserId, title + "\n" + stripHtml(content));
     }
 
@@ -53,9 +55,9 @@ public class NotificationService {
     public void testNotification(String channel, String target) {
         NotificationSettingsDto cfg = systemConfigService.getNotification();
         if ("email".equals(channel)) {
-            sendEmail(cfg, target, "【质量监控】测试邮件", "这是一封来自高校质量监控系统的测试邮件。");
+            sendEmail(cfg, target, NOTIFY_PREFIX + "测试邮件", "这是一封来自昆明学院质量监控任务管理系统的测试邮件。");
         } else if ("wechat".equals(channel)) {
-            sendWechat(cfg, target, "【质量监控】测试消息\n这是一条测试企业微信通知。");
+            sendWechat(cfg, target, NOTIFY_PREFIX + "测试消息\n这是一条测试企业微信通知。");
         }
     }
 

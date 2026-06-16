@@ -3,6 +3,7 @@ package com.uqm.controller;
 import com.uqm.common.ApiResponse;
 import com.uqm.common.PageResult;
 import com.uqm.dto.CreateTaskRequest;
+import com.uqm.dto.MessageSendTargetVo;
 import com.uqm.dto.MessageVo;
 import com.uqm.dto.SendMessageRequest;
 import com.uqm.dto.TaskVo;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -41,6 +43,12 @@ public class MessageController {
     @GetMapping("/unread-count")
     public ApiResponse<Map<String, Long>> unreadCount(@AuthenticationPrincipal LoginUser user) {
         return ApiResponse.ok(Map.of("count", messageService.getUnreadCount(user)));
+    }
+
+    @GetMapping("/send-targets")
+    public ApiResponse<List<MessageSendTargetVo>> sendTargets(
+            @AuthenticationPrincipal LoginUser user) {
+        return ApiResponse.ok(messageService.listSendTargets(user));
     }
 
     @PostMapping

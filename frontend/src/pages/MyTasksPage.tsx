@@ -79,7 +79,7 @@ export default function MyTasksPage() {
   ];
 
   return (
-    <div>
+    <div className="mobile-page">
       <Typography.Title level={4}>
         <ClockCircleOutlined /> 我的任务
       </Typography.Title>

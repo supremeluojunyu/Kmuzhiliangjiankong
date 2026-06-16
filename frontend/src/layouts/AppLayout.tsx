@@ -15,11 +15,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import IdentitySwitcher from '@/components/IdentitySwitcher';
 import MessageBell from '@/components/MessageBell';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBranding } from '@/contexts/BrandingContext';
+import { isMobileApp } from '@/utils/app';
 
 const { Header, Sider, Content } = Layout;
 
 export default function AppLayout() {
   const { user, logout, loading, hasPermission } = useAuth();
+  const { branding, logoSrc } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,8 +34,10 @@ export default function AppLayout() {
     );
   }
 
+  const mobileMode = isMobileApp();
+
   const menuItems = [
-    { key: '/', icon: <DashboardOutlined />, label: '工作台' },
+    ...(!mobileMode ? [{ key: '/', icon: <DashboardOutlined />, label: '工作台' }] : []),
     { key: '/my-tasks', icon: <ScheduleOutlined />, label: '我的任务' },
     { key: '/messages', icon: <MailOutlined />, label: '消息中心' },
     { key: '/help', icon: <QuestionCircleOutlined />, label: '使用帮助' },
@@ -45,7 +50,7 @@ export default function AppLayout() {
     ...(hasPermission('group:manage')
       ? [
           { key: '/groups', icon: <TeamOutlined />, label: '组管理' },
-          { key: '/logs', icon: <FileTextOutlined />, label: '操作日志' },
+          ...(!mobileMode ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }] : []),
         ]
       : []),
     ...(hasPermission('system:config')
@@ -56,7 +61,13 @@ export default function AppLayout() {
   return (
     <Layout className="app-layout">
       <Sider breakpoint="lg" collapsedWidth={64} theme="dark">
-        <div className="logo">质量监控</div>
+        <div className="logo">
+          {logoSrc ? (
+            <img src={logoSrc} alt="" className="sidebar-logo-img" />
+          ) : (
+            branding.siteShortName
+          )}
+        </div>
         <Menu
           theme="dark"
           mode="inline"
