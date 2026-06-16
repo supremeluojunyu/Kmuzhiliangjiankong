@@ -1,0 +1,46 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: university-quality-monitor
+  datasource:
+    url: jdbc:mysql://localhost:3306/uqm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: uqm
+    password: uqm_dev_2026
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 100MB
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+uqm:
+  jwt:
+    secret: uqm-jwt-secret-change-in-production-2026
+    expiration-ms: 7200000
+  upload:
+    type: local
+    path: /home/golden/university-quality-monitor/data/uploads
+    s3:
+      endpoint: ${S3_ENDPOINT:}
+      region: ${S3_REGION:us-east-1}
+      bucket: ${S3_BUCKET:}
+      access-key: ${S3_ACCESS_KEY:}
+      secret-key: ${S3_SECRET_KEY:}
+      path-style-access: ${S3_PATH_STYLE:true}
+
+logging:
+  level:
+    com.uqm: info
+    root: warn
