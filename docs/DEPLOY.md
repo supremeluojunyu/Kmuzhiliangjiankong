@@ -153,6 +153,51 @@ MinIO 控制台：http://localhost:9001（默认 minioadmin / minioadmin）
 
 ---
 
+## FRP 隧道与真实 IP
+
+操作日志需记录**访客真实 IP**。FRP 使用 **TCP 穿透**时不会自动带上 HTTP 头，后端只能看到 `127.0.0.1`。
+
+### 推荐方案：TCP + Proxy Protocol + 本地 Nginx 网关
+
+1. 启动本地网关（监听 `127.0.0.1:5180`，解析 Proxy Protocol 并写入 `X-Real-IP` / `X-Forwarded-For`）：
+
+```bash
+docker compose -f docker-compose.frp-gateway.yml up -d
+```
+
+2. 配置 `frpc.toml`（参考 `scripts/frpc.example.toml`）：
+
+```toml
+[[proxies]]
+name = "golden-uqm-web"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 5180
+remotePort = 5555
+transport.proxyProtocolVersion = "v2"
+```
+
+3. 重启 frpc：
+
+```bash
+systemctl --user restart frpc-uqm.service
+# 或: frpc -c frpc.toml
+```
+
+4. 重启后端使 `ClientIpResolver` 与 Tomcat 信任代理配置生效。
+
+网关会把 `/api/` 直接转发到 `8080`，页面请求转发到 Vite `5173`（开发）或改为 `80`（Docker 前端）。
+
+### 备选：FRP HTTP 模式
+
+若 frps 配置了 `vhostHTTPPort = 5555`，可将代理改为 `type = "http"`，FRP 会自动注入 `X-Forwarded-For`。
+
+### 验证
+
+公网访问后登录一次，在「操作日志」中应看到访客公网 IP，而非 `127.0.0.1`。
+
+---
+
 ## 生产环境建议
 
 1. **修改密钥**：在 `.env` 中设置强随机 `JWT_SECRET`、`DB_PASSWORD`

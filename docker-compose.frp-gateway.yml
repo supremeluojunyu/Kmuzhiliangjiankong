@@ -1,0 +1,10 @@
+# 可选：FRP Proxy Protocol 本地网关（解析真实客户端 IP）
+# 用法见 docs/DEPLOY.md「FRP 隧道与真实 IP」
+services:
+  frp-gateway:
+    image: nginx:1.27-alpine
+    container_name: uqm-frp-gateway
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./scripts/nginx-frp-gateway.conf:/etc/nginx/conf.d/default.conf:ro

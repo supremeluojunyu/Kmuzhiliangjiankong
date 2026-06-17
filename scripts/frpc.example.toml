@@ -1,0 +1,24 @@
+# FRP 客户端示例（复制到 frpc.toml 并按环境修改）
+# 文档：docs/DEPLOY.md → FRP 隧道与真实 IP
+
+serverAddr = "124.220.4.69"
+serverPort = 7000
+auth.token = "YOUR_TOKEN"
+loginFailExit = false
+
+# TCP + Proxy Protocol v2：需本地 5180 网关（docker-compose.frp-gateway.yml）
+[[proxies]]
+name = "golden-uqm-web"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 5180
+remotePort = 5555
+transport.proxyProtocolVersion = "v2"
+
+# 备选：若 frps 已配置 vhostHTTPPort=5555，可改用 HTTP 模式（自动注入 X-Forwarded-For）
+# [[proxies]]
+# name = "golden-uqm-web"
+# type = "http"
+# localIP = "127.0.0.1"
+# localPort = 5173
+# customDomains = ["124.220.4.69"]

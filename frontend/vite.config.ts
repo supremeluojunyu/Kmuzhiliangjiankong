@@ -25,14 +25,17 @@ export default defineConfig({
             const remote = req.socket?.remoteAddress?.replace(/^::ffff:/, '');
             const incomingXff = req.headers['x-forwarded-for'];
             const incomingRealIp = req.headers['x-real-ip'];
+            const loopback = !remote || remote === '127.0.0.1' || remote === '::1';
+
+            // 保留 FRP/Nginx 已注入的真实 IP，不要用 127.0.0.1 覆盖
             if (incomingXff) {
               proxyReq.setHeader('X-Forwarded-For', String(incomingXff));
-            } else if (remote) {
+            } else if (!loopback) {
               proxyReq.setHeader('X-Forwarded-For', remote);
             }
             if (incomingRealIp) {
               proxyReq.setHeader('X-Real-IP', String(incomingRealIp));
-            } else if (remote) {
+            } else if (!loopback) {
               proxyReq.setHeader('X-Real-IP', remote);
             }
           });
