@@ -1,4 +1,5 @@
 import {
+  BankOutlined,
   DashboardOutlined,
   FileTextOutlined,
   LogoutOutlined,
@@ -54,6 +55,9 @@ export default function AppLayout() {
     ...(hasPermission('group:manage')
       ? [{ key: '/groups', icon: <TeamOutlined />, label: '组管理' }]
       : []),
+    ...(hasPermission('college:manage')
+      ? [{ key: '/colleges', icon: <BankOutlined />, label: '学院管理' }]
+      : []),
     ...(canViewLogs && !mobileMode
       ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }]
       : []),
@@ -68,6 +72,9 @@ export default function AppLayout() {
 
   const selectedKey = location.pathname.startsWith('/tasks') ? '/tasks'
     : location.pathname.startsWith('/my-tasks') ? '/my-tasks'
+    : location.pathname.startsWith('/users') ? '/users'
+    : location.pathname.startsWith('/groups') ? '/groups'
+    : location.pathname.startsWith('/colleges') ? '/colleges'
     : location.pathname.startsWith('/logs') ? '/logs'
     : location.pathname.startsWith('/settings') ? '/settings'
     : location.pathname.startsWith('/help') ? '/help'

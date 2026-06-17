@@ -7,6 +7,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import LoginPage from '@/pages/LoginPage';
 import UsersPage from '@/pages/UsersPage';
 import GroupsPage from '@/pages/GroupsPage';
+import CollegesPage from '@/pages/CollegesPage';
 import OperationLogsPage from '@/pages/OperationLogsPage';
 import MessagesPage from '@/pages/MessagesPage';
 import MyTasksPage from '@/pages/MyTasksPage';
@@ -108,6 +109,7 @@ function AppRoutes() {
         <Route path="tasks/:taskId" element={<TaskEditPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="groups" element={<GroupsPage />} />
+        <Route path="colleges" element={<CollegesPage />} />
         <Route path="logs" element={<OperationLogsPage />} />
         <Route path="settings" element={<SystemSettingsPage />} />
       </Route>

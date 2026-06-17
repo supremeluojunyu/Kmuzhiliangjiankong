@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   ArrowLeftOutlined,
+  BankOutlined,
   FileTextOutlined,
   MailOutlined,
   MoreOutlined,
@@ -31,6 +32,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/tasks': '任务管理',
   '/users': '用户管理',
   '/groups': '组管理',
+  '/colleges': '学院管理',
   '/logs': '操作日志',
   '/settings': '系统配置',
 };
@@ -55,6 +57,7 @@ export default function MobileLayout() {
       location.pathname.startsWith('/tasks') ||
       location.pathname.startsWith('/users') ||
       location.pathname.startsWith('/groups') ||
+      location.pathname.startsWith('/colleges') ||
       location.pathname.startsWith('/logs') ||
       location.pathname.startsWith('/settings')
     ) {
@@ -83,6 +86,10 @@ export default function MobileLayout() {
       navigate('/tasks');
       return;
     }
+    if (location.pathname.startsWith('/colleges')) {
+      navigate('/colleges');
+      return;
+    }
     navigate('/profile');
   };
 
@@ -99,6 +106,9 @@ export default function MobileLayout() {
       : []),
     ...(hasPermission('group:manage')
       ? [{ key: '/groups', icon: <TeamOutlined />, label: '组管理' }]
+      : []),
+    ...(hasPermission('college:manage')
+      ? [{ key: '/colleges', icon: <BankOutlined />, label: '学院管理' }]
       : []),
     ...(canViewLogs
       ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }]

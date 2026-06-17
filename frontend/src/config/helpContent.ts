@@ -112,6 +112,7 @@ const PERMISSION_HINTS: Record<string, string> = {
   'data:export': '导出：下载 Excel 格式的统计与评语数据。',
   'user:manage': '用户管理：维护账号、所属组与联系方式。',
   'group:manage': '组管理：维护用户组及其权限配置。',
+  'college:manage': '学院管理：维护学院名称与代码，供用户归属与任务分配使用。',
   'system:config': '系统配置：认证、通知、存储与数据保留策略。',
   'task:submit': '任务执行：在流程节点中提交材料与附件。',
   'task:view': '任务查看：只读浏览任务进度与已提交内容。',

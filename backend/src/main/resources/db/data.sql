@@ -26,6 +26,7 @@ INSERT INTO `permission` (`permission_code`, `permission_name`) VALUES
 ('data:export', '导出数据'),
 ('user:manage', '用户管理'),
 ('group:manage', '组管理'),
+('college:manage', '学院管理'),
 ('system:config', '系统配置管理'),
 ('task:submit', '提交材料'),
 ('task:view', '只读查看'),
