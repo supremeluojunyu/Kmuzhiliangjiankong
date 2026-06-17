@@ -196,3 +196,8 @@ CREATE TABLE IF NOT EXISTS `deadline_remind_log` (
   FOREIGN KEY (`instance_id`) REFERENCES `task_instance`(`id`),
   FOREIGN KEY (`user_id`) REFERENCES `user`(`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `schema_migration` (
+  `version` VARCHAR(64) PRIMARY KEY,
+  `applied_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

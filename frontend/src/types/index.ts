@@ -51,6 +51,7 @@ export interface MessageItem {
   instanceId?: number;
   sendTime: string;
   isRead: boolean;
+  sentByMe?: boolean;
   targetGroupNames?: string[];
   targetUserNames?: string[];
 }
@@ -82,6 +83,9 @@ export interface TaskItem {
   creatorId?: number;
   creatorName?: string;
   createdAt: string;
+  editable?: boolean;
+  canManage?: boolean;
+  deletable?: boolean;
 }
 
 export interface UserGroup {

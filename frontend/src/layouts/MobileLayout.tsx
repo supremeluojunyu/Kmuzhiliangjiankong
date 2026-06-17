@@ -1,9 +1,11 @@
 import {
   AppstoreOutlined,
+  FileTextOutlined,
   MailOutlined,
   MoreOutlined,
   ProfileOutlined,
   ScheduleOutlined,
+  SettingOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -26,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/tasks': '任务管理',
   '/users': '用户管理',
   '/groups': '组管理',
+  '/logs': '操作日志',
   '/settings': '系统配置',
 };
 
@@ -46,6 +49,7 @@ export default function MobileLayout() {
       location.pathname.startsWith('/tasks') ||
       location.pathname.startsWith('/users') ||
       location.pathname.startsWith('/groups') ||
+      location.pathname.startsWith('/logs') ||
       location.pathname.startsWith('/settings')
     ) {
       return 'more';
@@ -58,6 +62,10 @@ export default function MobileLayout() {
     return key ? PAGE_TITLES[key] : branding.siteShortName;
   }, [location.pathname, branding.siteShortName]);
 
+  const canViewLogs = hasPermission('user:manage')
+    || hasPermission('group:manage')
+    || hasPermission('system:config');
+
   const moreItems = [
     ...(hasPermission('task:create') || hasPermission('task:config')
       ? [{ key: '/tasks', icon: <ProfileOutlined />, label: '任务管理' }]
@@ -67,6 +75,12 @@ export default function MobileLayout() {
       : []),
     ...(hasPermission('group:manage')
       ? [{ key: '/groups', icon: <TeamOutlined />, label: '组管理' }]
+      : []),
+    ...(canViewLogs
+      ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }]
+      : []),
+    ...(hasPermission('system:config')
+      ? [{ key: '/settings', icon: <SettingOutlined />, label: '系统配置' }]
       : []),
   ];
 

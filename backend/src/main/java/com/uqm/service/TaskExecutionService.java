@@ -236,44 +236,23 @@ public class TaskExecutionService {
         if (config == null || !groupInFlow(config, groupId)) {
             return false;
         }
-        if (hasActiveNodeForGroup(instance, groupId)) {
-            if (instance.getAssignedToUserId().equals(user.getUserId())) {
-                return true;
-            }
-            FlowNode active = findActiveNodeDef(config, loadNodeRecords(instance.getId()), groupId);
-            if (active != null && isDownstreamNode(config, active)) {
-                return true;
-            }
+        if ("closed".equals(instance.getStatus())) {
+            return false;
         }
-        if (instance.getAssignedToUserId().equals(user.getUserId())
-                && instance.getTargetGroupId().equals(groupId)) {
-            return hasGroupParticipation(instance, config, groupId);
+        // 入口执行组：仅被分配到的执行人可见
+        if (groupId.equals(instance.getTargetGroupId())) {
+            return instance.getAssignedToUserId().equals(user.getUserId());
         }
-        return false;
-    }
-
-    private boolean isDownstreamNode(TaskFlowConfig config, FlowNode node) {
-        return workflowRuntime.getEntryNodes(config).stream()
-                .noneMatch(entry -> entry.getNodeId().equals(node.getNodeId()));
+        // 下游执行组：同学院范围内可查看流程进度（只读，操作仍由 submitNode 校验）
+        if (instance.getCollegeId() != null && user.getCollegeId() != null
+                && !instance.getCollegeId().equals(user.getCollegeId())) {
+            return false;
+        }
+        return true;
     }
 
     private boolean groupInFlow(TaskFlowConfig config, Integer groupId) {
         return config.getNodes().stream().anyMatch(n -> groupId.equals(n.getExecuteGroupId()));
-    }
-
-    private boolean hasGroupParticipation(TaskInstance instance, TaskFlowConfig config, Integer groupId) {
-        List<NodeRecord> records = loadNodeRecords(instance.getId());
-        for (NodeRecord record : records) {
-            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
-            if (node == null || !groupId.equals(node.getExecuteGroupId())) {
-                continue;
-            }
-            if (!"pending".equals(record.getStatus())) {
-                return true;
-            }
-        }
-        return workflowRuntime.getEntryNodes(config).stream()
-                .anyMatch(n -> groupId.equals(n.getExecuteGroupId()));
     }
 
     private TaskFlowConfig loadFlowConfig(Integer taskDefinitionId) {
@@ -301,24 +280,6 @@ public class TaskExecutionService {
             return instance;
         }
         throw new BusinessException(403, "无权访问该任务实例");
-    }
-
-    private boolean hasActiveNodeForGroup(TaskInstance instance, Integer groupId) {
-        TaskFlowConfig config = loadFlowConfig(instance.getTaskDefinitionId());
-        if (config == null) {
-            return false;
-        }
-        List<NodeRecord> records = loadNodeRecords(instance.getId());
-        for (NodeRecord record : records) {
-            if (!List.of("in_progress", "draft").contains(record.getStatus())) {
-                continue;
-            }
-            FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
-            if (node != null && groupId.equals(node.getExecuteGroupId())) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private FlowNode findActiveNodeDef(TaskFlowConfig config, List<NodeRecord> records, Integer groupId) {
@@ -376,30 +337,27 @@ public class TaskExecutionService {
 
     private void applyCurrentNodeForUser(
             MyTaskVo vo, TaskInstance instance, TaskFlowConfig config, LoginUser user, List<NodeRecord> records) {
-        if (canViewAllNodes(user)) {
-            FlowNode currentNode = instance.getCurrentNodeId() != null
-                    ? workflowRuntime.getNode(config, instance.getCurrentNodeId()) : null;
-            if (currentNode != null) {
-                vo.setCurrentNodeId(currentNode.getNodeId());
-                vo.setCurrentNodeName(currentNode.getNodeName());
-                vo.setCurrentNodeType(currentNode.getNodeType());
-            }
+        FlowNode currentNode = instance.getCurrentNodeId() != null
+                ? workflowRuntime.getNode(config, instance.getCurrentNodeId()) : null;
+        if (currentNode != null) {
+            vo.setCurrentNodeId(currentNode.getNodeId());
+            vo.setCurrentNodeName(currentNode.getNodeName());
+            vo.setCurrentNodeType(currentNode.getNodeType());
             return;
         }
-        Integer groupId = user.getCurrentGroupId();
-        FlowNode active = findActiveNodeDef(config, records, groupId);
-        if (active != null) {
-            vo.setCurrentNodeId(active.getNodeId());
-            vo.setCurrentNodeName(active.getNodeName());
-            vo.setCurrentNodeType(active.getNodeType());
+        if ("completed".equals(instance.getStatus())) {
             return;
         }
         for (NodeRecord record : records) {
+            if (!List.of("in_progress", "draft").contains(record.getStatus())) {
+                continue;
+            }
             FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
-            if (node != null && groupId.equals(node.getExecuteGroupId()) && "completed".equals(record.getStatus())) {
+            if (node != null) {
                 vo.setCurrentNodeId(node.getNodeId());
                 vo.setCurrentNodeName(node.getNodeName());
                 vo.setCurrentNodeType(node.getNodeType());
+                return;
             }
         }
     }
@@ -432,21 +390,39 @@ public class TaskExecutionService {
             return vo;
         }
 
-        List<NodeRecordVo> allRecords = records.stream()
-                .map(r -> toNodeRecordVo(r, config))
-                .toList();
-        if (canViewAllNodes(user)) {
-            vo.setNodeRecords(allRecords);
-            return vo;
-        }
-
         Integer groupId = user.getCurrentGroupId();
-        vo.setNodeRecords(allRecords.stream()
-                .filter(r -> groupId.equals(r.getExecuteGroupId()))
-                .toList());
         FlowNode activeNode = findActiveNodeDef(config, records, groupId);
-        vo.setReferenceMaterials(collectReferenceMaterials(config, records, activeNode));
+        List<NodeRecordVo> referenceMaterials = collectReferenceMaterials(config, records, activeNode);
+        vo.setReferenceMaterials(referenceMaterials);
+        Set<String> referenceNodeIds = referenceMaterials.stream()
+                .map(NodeRecordVo::getNodeId)
+                .collect(Collectors.toCollection(HashSet::new));
+
+        List<NodeRecordVo> allRecords = records.stream()
+                .map(r -> sanitizeNodeRecordForViewer(r, config, groupId, referenceNodeIds))
+                .toList();
+        vo.setNodeRecords(allRecords);
         return vo;
+    }
+
+    private NodeRecordVo sanitizeNodeRecordForViewer(
+            NodeRecord record, TaskFlowConfig config, Integer groupId, Set<String> referenceNodeIds) {
+        NodeRecordVo nvo = toNodeRecordVo(record, config);
+        boolean isMine = groupId.equals(nvo.getExecuteGroupId());
+        boolean canOperate = canOperateNode(config, record, groupId);
+        nvo.setCanOperate(canOperate);
+        if (!canOperate && !isMine && !referenceNodeIds.contains(nvo.getNodeId())) {
+            nvo.setSubmitData(null);
+        }
+        return nvo;
+    }
+
+    private boolean canOperateNode(TaskFlowConfig config, NodeRecord record, Integer groupId) {
+        FlowNode node = workflowRuntime.getNode(config, record.getNodeId());
+        if (node == null || !groupId.equals(node.getExecuteGroupId())) {
+            return false;
+        }
+        return List.of("in_progress", "draft").contains(record.getStatus());
     }
 
     private NodeRecordVo toNodeRecordVo(NodeRecord record, TaskFlowConfig config) {

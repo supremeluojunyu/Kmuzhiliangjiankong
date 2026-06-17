@@ -35,6 +35,9 @@ export default function AppLayout() {
   }
 
   const mobileMode = isMobileApp();
+  const canViewLogs = hasPermission('user:manage')
+    || hasPermission('group:manage')
+    || hasPermission('system:config');
 
   const menuItems = [
     ...(!mobileMode ? [{ key: '/', icon: <DashboardOutlined />, label: '工作台' }] : []),
@@ -48,10 +51,10 @@ export default function AppLayout() {
       ? [{ key: '/users', icon: <UserOutlined />, label: '用户管理' }]
       : []),
     ...(hasPermission('group:manage')
-      ? [
-          { key: '/groups', icon: <TeamOutlined />, label: '组管理' },
-          ...(!mobileMode ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }] : []),
-        ]
+      ? [{ key: '/groups', icon: <TeamOutlined />, label: '组管理' }]
+      : []),
+    ...(canViewLogs && !mobileMode
+      ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }]
       : []),
     ...(hasPermission('system:config')
       ? [{ key: '/settings', icon: <SettingOutlined />, label: '系统配置' }]

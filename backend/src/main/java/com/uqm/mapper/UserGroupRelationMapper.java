@@ -31,6 +31,9 @@ public interface UserGroupRelationMapper extends BaseMapper<UserGroupRelation> {
     @Delete("DELETE FROM user_group WHERE user_id = #{userId}")
     void deleteByUserId(@Param("userId") Integer userId);
 
+    @Delete("DELETE FROM user_group WHERE group_id = #{groupId}")
+    void deleteByGroupId(@Param("groupId") Integer groupId);
+
     @Insert("""
             <script>
             INSERT INTO user_group (user_id, group_id, is_default, sort_order) VALUES
@@ -47,4 +50,7 @@ public interface UserGroupRelationMapper extends BaseMapper<UserGroupRelation> {
 
     @Select("SELECT COUNT(*) FROM user_group WHERE group_id = #{groupId}")
     long countMembers(@Param("groupId") Integer groupId);
+
+    @Select("SELECT COUNT(*) FROM user_group WHERE user_id = #{userId} AND group_id = #{groupId}")
+    long countUserInGroup(@Param("userId") Integer userId, @Param("groupId") Integer groupId);
 }

@@ -277,6 +277,34 @@ body {
   overflow: hidden;
 }
 
+.message-target-picker {
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fafafa;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.message-target-group-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-target-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 24px;
+  padding-left: 12px;
+  border-left: 2px solid #e8e8e8;
+}
+
+.message-target-user-list .ant-checkbox-wrapper {
+  margin-inline-start: 0;
+}
+
 /* 我的 */
 .profile-page {
   display: flex;

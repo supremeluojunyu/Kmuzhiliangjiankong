@@ -4,26 +4,32 @@ import {
   Form,
   Input,
   Modal,
+  Popconfirm,
   Space,
   Table,
+  Tabs,
   Tag,
-  TreeSelect,
   Typography,
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  buildSendTargetTree,
   describeSendTargets,
+  canDeleteMessage,
+  deleteMessage,
   fetchMessages,
   fetchSendTargets,
   markAllMessagesRead,
   markMessageRead,
-  parseSendTargets,
   sendMessage,
+  type MessageDirection,
   type MessageSendTargetGroup,
 } from '@/api/message';
+import MessageTargetPicker, {
+  hasMessageTargetSelection,
+  type MessageTargetSelection,
+} from '@/components/MessageTargetPicker';
 import RichTextEditor from '@/components/RichTextEditor';
 import RichTextView from '@/components/RichTextView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,22 +42,21 @@ const statusMap: Record<string, { color: string; text: string }> = {
 };
 
 export default function MessagesPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const [list, setList] = useState<MessageItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [direction, setDirection] = useState<MessageDirection>('all');
   const [loading, setLoading] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
   const [sendTargets, setSendTargets] = useState<MessageSendTargetGroup[]>([]);
   const [targetsLoading, setTargetsLoading] = useState(false);
   const [form] = Form.useForm();
 
-  const targetTree = useMemo(() => buildSendTargetTree(sendTargets), [sendTargets]);
-
-  const load = async (p = page) => {
+  const load = async (p = page, dir = direction) => {
     setLoading(true);
     try {
-      const res = await fetchMessages(p);
+      const res = await fetchMessages(p, 20, dir);
       setList(res.list);
       setTotal(res.total);
     } finally {
@@ -60,10 +65,11 @@ export default function MessagesPage() {
   };
 
   useEffect(() => {
-    load(page);
-  }, [page]);
+    load(page, direction);
+  }, [page, direction]);
 
   const openSendModal = async () => {
+    form.resetFields();
     setSendOpen(true);
     setTargetsLoading(true);
     try {
@@ -78,10 +84,22 @@ export default function MessagesPage() {
 
   const columns: ColumnsType<MessageItem> = [
     {
-      title: '状态',
+      title: '方向',
       width: 80,
       render: (_, r) =>
-        r.isRead ? <Tag>已读</Tag> : <Tag color="red">未读</Tag>,
+        r.sentByMe ? (
+          <Tag color="cyan">发出</Tag>
+        ) : (
+          <Tag color="geekblue">收到</Tag>
+        ),
+    },
+    {
+      title: '状态',
+      width: 80,
+      render: (_, r) => {
+        if (r.sentByMe) return <Tag color="green">已发出</Tag>;
+        return r.isRead ? <Tag>已读</Tag> : <Tag color="red">未读</Tag>;
+      },
     },
     {
       title: '标题',
@@ -89,9 +107,9 @@ export default function MessagesPage() {
       render: (text, r) => (
         <Typography.Link
           onClick={async () => {
-            if (!r.isRead) {
+            if (!r.sentByMe && !r.isRead) {
               await markMessageRead(r.messageId);
-              load(page);
+              load(page, direction);
             }
           }}
         >
@@ -128,19 +146,42 @@ export default function MessagesPage() {
       ),
     },
     { title: '时间', dataIndex: 'sendTime', width: 180 },
+    {
+      title: '操作',
+      width: 80,
+      render: (_, r) =>
+        canDeleteMessage(hasPermission, user?.userId, r) ? (
+          <Popconfirm
+            title="确定删除该消息？"
+            description="删除后所有接收者将无法再查看此消息"
+            onConfirm={async () => {
+              try {
+                await deleteMessage(r.messageId);
+                message.success('消息已删除');
+                load(page, direction);
+              } catch (e) {
+                message.error(e instanceof Error ? e.message : '删除失败');
+              }
+            }}
+          >
+            <Button type="link" danger size="small">
+              删除
+            </Button>
+          </Popconfirm>
+        ) : null,
+    },
   ];
 
   const handleSend = async () => {
     const values = await form.validateFields();
-    const raw = values.targets || [];
-    const selected: string[] = raw.map((item: string | { value: string }) =>
-      typeof item === 'string' ? item : item.value,
-    );
-    const { targetGroupIds, targetUserIds } = parseSendTargets(selected);
-    if (targetGroupIds.length === 0 && targetUserIds.length === 0) {
+    const picked = values.targets as MessageTargetSelection | undefined;
+    if (!hasMessageTargetSelection(picked)) {
       message.warning('请选择接收组或个人');
       return;
     }
+
+    const targetGroupIds = picked!.targetGroupIds;
+    const targetUserIds = picked!.targetUserIds;
 
     try {
       const result = await sendMessage({
@@ -152,8 +193,9 @@ export default function MessagesPage() {
       const summary = describeSendTargets(sendTargets, targetGroupIds, targetUserIds);
       setSendOpen(false);
       form.resetFields();
-      load(1);
+      setDirection('sent');
       setPage(1);
+      load(1, 'sent');
 
       Modal.success({
         title: '消息发送成功',
@@ -163,6 +205,9 @@ export default function MessagesPage() {
               已向 <strong>{summary}</strong> 发送消息：
             </p>
             <p style={{ margin: 0 }}>「{result.title || values.title}」</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#666' }}>
+              可在「我发出的」中查看已发送记录
+            </p>
           </div>
         ),
         okText: '知道了',
@@ -175,12 +220,12 @@ export default function MessagesPage() {
 
   return (
     <div className="mobile-page">
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }} wrap>
         <Typography.Title level={4} style={{ margin: 0 }}>
           <MailOutlined /> 消息中心
         </Typography.Title>
-        <Space>
-          <Button onClick={async () => { await markAllMessagesRead(); load(page); }}>
+        <Space wrap>
+          <Button onClick={async () => { await markAllMessagesRead(); load(page, direction); }}>
             全部已读
           </Button>
           {hasPermission('message:send') && (
@@ -190,6 +235,20 @@ export default function MessagesPage() {
           )}
         </Space>
       </Space>
+
+      <Tabs
+        activeKey={direction}
+        onChange={(key) => {
+          setDirection(key as MessageDirection);
+          setPage(1);
+        }}
+        style={{ marginBottom: 12 }}
+        items={[
+          { key: 'all', label: '全部' },
+          { key: 'received', label: '我收到的' },
+          { key: 'sent', label: '我发出的' },
+        ]}
+      />
 
       <Table
         rowKey="messageId"
@@ -213,10 +272,11 @@ export default function MessagesPage() {
         onOk={handleSend}
         onCancel={() => setSendOpen(false)}
         destroyOnClose
-        width={640}
+        width={720}
         okText="发送"
+        styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" initialValues={{ targets: { targetGroupIds: [], targetUserIds: [] } }}>
           <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}>
             <Input placeholder="消息标题" />
           </Form.Item>
@@ -226,22 +286,16 @@ export default function MessagesPage() {
           <Form.Item
             name="targets"
             label="接收对象"
-            extra="选择组：组内全员接收；选择组下个人：仅该人接收"
-            rules={[{ required: true, message: '请选择接收组或个人' }]}
+            rules={[
+              {
+                validator: (_, value: MessageTargetSelection) =>
+                  hasMessageTargetSelection(value)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('请至少选择一个组（全员）或组内成员')),
+              },
+            ]}
           >
-            <TreeSelect
-              treeData={targetTree}
-              treeCheckable
-              showCheckedStrategy={TreeSelect.SHOW_CHILD}
-              treeCheckStrictly
-              placeholder={targetsLoading ? '加载中…' : '请选择组或个人'}
-              loading={targetsLoading}
-              disabled={targetsLoading}
-              style={{ width: '100%' }}
-              maxTagCount="responsive"
-              listHeight={280}
-              treeDefaultExpandAll
-            />
+            <MessageTargetPicker groups={sendTargets} loading={targetsLoading} />
           </Form.Item>
         </Form>
       </Modal>

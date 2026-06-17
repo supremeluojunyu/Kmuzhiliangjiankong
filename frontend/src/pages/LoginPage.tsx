@@ -1,12 +1,13 @@
 import { LockOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Card, Divider, Form, Input, Modal, Space, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import ServerConfigModal from '@/components/ServerConfigModal';
 import { fetchPublicAuthConfig, type PublicAuthConfig } from '@/api/settings';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
 import { getDefaultHomePath, isMobileApp } from '@/utils/app';
+import { getSafeRedirectPath } from '@/utils/authRedirect';
 import { formatApiError, getApiBaseUrl, isNetworkError } from '@/utils/serverConfig';
 import {
   enterManualServerMode,
@@ -17,9 +18,10 @@ import {
 const NETWORK_FAIL_THRESHOLD = 2;
 
 export default function LoginPage() {
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   const { branding, logoSrc } = useBranding();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [authConfig, setAuthConfig] = useState<PublicAuthConfig | null>(null);
   const [networkFailCount, setNetworkFailCount] = useState(0);
@@ -34,10 +36,6 @@ export default function LoginPage() {
   useEffect(() => {
     setManualMode(isManualServerMode());
   }, [configOpen]);
-
-  if (user) {
-    return <Navigate to={getDefaultHomePath()} replace />;
-  }
 
   const openServerConfig = () => {
     enterManualServerMode();
@@ -67,7 +65,8 @@ export default function LoginPage() {
       exitManualServerMode();
       setManualMode(false);
       message.success('登录成功');
-      navigate(getDefaultHomePath());
+      const target = getSafeRedirectPath(searchParams.get('redirect')) || getDefaultHomePath();
+      navigate(target, { replace: true });
     } catch (e) {
       if (isNetworkError(e)) {
         const next = networkFailCount + 1;
@@ -153,12 +152,6 @@ export default function LoginPage() {
               </Button>
             )}
           </Form>
-        )}
-
-        {showLocal && !isMobileApp() && (
-          <Typography.Paragraph type="secondary" style={{ marginTop: 16, textAlign: 'center' }}>
-            默认账号：admin / admin123
-          </Typography.Paragraph>
         )}
       </Card>
 

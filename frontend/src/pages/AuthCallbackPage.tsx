@@ -1,8 +1,10 @@
 import { Spin, Typography, message } from 'antd';
 import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { setStoredGroupId, setToken } from '@/api/client';
+import { setStoredGroupId, setToken, clearAuthStorage } from '@/api/client';
 import { fetchProfile } from '@/api/auth';
+import { getDefaultHomePath } from '@/utils/app';
+import { getSafeRedirectPath } from '@/utils/authRedirect';
 
 export default function AuthCallbackPage() {
   const [params] = useSearchParams();
@@ -15,15 +17,17 @@ export default function AuthCallbackPage() {
       navigate('/login', { replace: true });
       return;
     }
+    clearAuthStorage();
     setToken(token);
     fetchProfile()
       .then((profile) => {
         setStoredGroupId(profile.currentGroupId);
         message.success('统一认证登录成功');
-        navigate('/', { replace: true });
-        window.location.reload();
+        const target = getSafeRedirectPath(params.get('redirect')) || getDefaultHomePath();
+        navigate(target, { replace: true });
       })
       .catch(() => {
+        clearAuthStorage();
         message.error('登录状态同步失败');
         navigate('/login', { replace: true });
       });

@@ -13,9 +13,11 @@ export interface MessageSendTargetGroup {
   users: MessageSendTargetUser[];
 }
 
-export async function fetchMessages(page = 1, pageSize = 20) {
+export type MessageDirection = 'all' | 'received' | 'sent';
+
+export async function fetchMessages(page = 1, pageSize = 20, direction: MessageDirection = 'all') {
   const { data } = await api.get<ApiResponse<PageResult<MessageItem>>>('/messages', {
-    params: { page, pageSize },
+    params: { page, pageSize, direction },
   });
   return data.data;
 }
@@ -48,6 +50,23 @@ export async function markMessageRead(messageId: number) {
 
 export async function markAllMessagesRead() {
   await api.post('/messages/read-all');
+}
+
+export async function deleteMessage(messageId: number) {
+  await api.delete(`/messages/${messageId}`);
+}
+
+export function canDeleteMessage(
+  hasPermission: (code: string) => boolean,
+  currentUserId: number | undefined,
+  message: { senderId?: number; sentByMe?: boolean },
+): boolean {
+  if (hasPermission('user:manage') || hasPermission('group:manage') || hasPermission('system:config')) {
+    return true;
+  }
+  return hasPermission('message:send')
+    && !!currentUserId
+    && (message.sentByMe || message.senderId === currentUserId);
 }
 
 /** 树形选择值：g-{groupId} 整组，u-{userId} 个人 */

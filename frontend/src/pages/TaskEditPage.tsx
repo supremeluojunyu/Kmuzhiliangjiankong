@@ -48,12 +48,14 @@ export default function TaskEditPage() {
   const [groups, setGroups] = useState<{ groupId: number; groupName: string }[]>([]);
   const [templates, setTemplates] = useState<{ templateId: number; templateName: string }[]>([]);
   const [status, setStatus] = useState('draft');
+  const [editable, setEditable] = useState(true);
+  const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saveTplOpen, setSaveTplOpen] = useState(false);
   const [tplForm] = Form.useForm();
   const description = Form.useWatch('description', form);
 
-  const readOnly = !isNew && status !== 'draft' && status !== 'paused';
+  const readOnly = !isNew && !editable;
   const isPaused = status === 'paused';
 
   useEffect(() => {
@@ -95,6 +97,8 @@ export default function TaskEditPage() {
       fetchTask(Number(taskId))
         .then((task) => {
           setStatus(task.status);
+          setEditable(task.editable ?? false);
+          setCanManage(task.canManage ?? false);
           form.setFieldsValue({
             taskName: task.taskName,
             description: task.description,
@@ -167,6 +171,7 @@ export default function TaskEditPage() {
     try {
       const task = await pauseTask(Number(taskId));
       setStatus(task.status);
+      setEditable(task.editable ?? true);
       message.success('任务已暂停，可修改流程配置');
     } catch (e) {
       message.error(e instanceof Error ? e.message : '暂停失败');
@@ -228,6 +233,10 @@ export default function TaskEditPage() {
     return <Typography.Text type="danger">无创建任务权限</Typography.Text>;
   }
 
+  if (!isNew && !hasPermission('task:create') && !hasPermission('task:config')) {
+    return <Typography.Text type="danger">无任务管理权限</Typography.Text>;
+  }
+
   return (
     <div>
       <Typography.Title level={4}>
@@ -241,6 +250,20 @@ export default function TaskEditPage() {
           style={{ marginBottom: 16 }}
           message="任务已暂停"
           description="可修改流程节点与时间配置。保存后点击「恢复运行」继续；进行中实例将按新流程同步未完成的节点。"
+        />
+      )}
+
+      {readOnly && !isNew && status !== 'closed' && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="当前为只读查看"
+          description={
+            canManage
+              ? '任务已发布或进行中，如需修改请先点击「暂停后可编辑」。如需彻底移除，请在任务列表中选中后删除。'
+              : '任务已发布或进行中，如需修改请联系管理员暂停任务。如需彻底移除，请联系管理员在任务列表中删除。'
+          }
         />
       )}
 
@@ -441,7 +464,7 @@ export default function TaskEditPage() {
             {!isNew && !isPaused && hasPermission('task:create') && (
               <Button onClick={handlePublish}>保存并发布</Button>
             )}
-            {isPaused && hasPermission('task:config') && (
+            {isPaused && canManage && (
               <>
                 <Button type="primary" onClick={handleResume}>恢复运行</Button>
                 <Button danger onClick={handleStop}>停止任务</Button>
@@ -452,9 +475,9 @@ export default function TaskEditPage() {
         )}
         {readOnly && !isNew && (
           <Space style={{ marginTop: 16 }} wrap>
-            {['published', 'in_progress'].includes(status) && hasPermission('task:config') && (
+            {['published', 'in_progress'].includes(status) && canManage && (
               <>
-                <Button onClick={handlePause}>暂停</Button>
+                <Button onClick={handlePause}>暂停后可编辑</Button>
                 <Button danger onClick={handleStop}>停止</Button>
               </>
             )}

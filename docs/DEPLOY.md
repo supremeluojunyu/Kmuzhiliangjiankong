@@ -82,6 +82,23 @@ sudo mysql uqm < backend/src/main/resources/db/data.sql
 sudo mysql uqm < backend/src/main/resources/db/seed-test-users.sql
 ```
 
+### 增量迁移（已有库升级）
+
+新功能可能附带 `backend/src/main/resources/db/migrate-p*.sql`。升级时在项目根目录执行：
+
+```bash
+chmod +x scripts/migrate-db.sh
+./scripts/migrate-db.sh
+```
+
+脚本会创建 `schema_migration` 表并仅执行尚未应用的迁移。若数据库此前已手工执行过全部迁移，可一次性标记为已执行：
+
+```bash
+./scripts/migrate-db.sh --baseline-all
+```
+
+Docker 部署后 `scripts/docker-up.sh` 会自动尝试运行迁移（需 MySQL 端口可从宿主机访问）。
+
 ### 启动
 
 ```bash

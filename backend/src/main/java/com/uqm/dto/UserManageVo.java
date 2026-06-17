@@ -20,4 +20,6 @@ public class UserManageVo {
     private Integer defaultGroupId;
     private String email;
     private String wechatUserId;
+    /** 是否可删除（关联任务均为草稿/已暂停/已停止） */
+    private Boolean deletable;
 }

@@ -13,6 +13,7 @@ import com.uqm.service.TaskService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,8 +37,9 @@ public class MessageController {
     public ApiResponse<PageResult<MessageVo>> list(
             @AuthenticationPrincipal LoginUser user,
             @RequestParam(defaultValue = "1") long page,
-            @RequestParam(defaultValue = "20") long pageSize) {
-        return ApiResponse.ok(messageService.listMessages(user, page, pageSize));
+            @RequestParam(defaultValue = "20") long pageSize,
+            @RequestParam(defaultValue = "all") String direction) {
+        return ApiResponse.ok(messageService.listMessages(user, page, pageSize, direction));
     }
 
     @GetMapping("/unread-count")
@@ -69,6 +71,14 @@ public class MessageController {
     @PostMapping("/read-all")
     public ApiResponse<Void> markAllRead(@AuthenticationPrincipal LoginUser user) {
         messageService.markAllRead(user);
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/{messageId}")
+    public ApiResponse<Void> delete(
+            @AuthenticationPrincipal LoginUser user,
+            @PathVariable Integer messageId) {
+        messageService.deleteMessage(user, messageId);
         return ApiResponse.ok();
     }
 }

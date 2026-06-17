@@ -12,6 +12,7 @@ public class OperationLogVo {
     private Integer userId;
     private String userName;
     private Integer groupId;
+    private String groupName;
     private String action;
     private String targetType;
     private Integer targetId;

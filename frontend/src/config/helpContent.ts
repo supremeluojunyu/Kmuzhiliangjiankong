@@ -113,6 +113,10 @@ const PERMISSION_HINTS: Record<string, string> = {
   'user:manage': '用户管理：维护账号、所属组与联系方式。',
   'group:manage': '组管理：维护用户组及其权限配置。',
   'system:config': '系统配置：认证、通知、存储与数据保留策略。',
+  'task:submit': '任务执行：在流程节点中提交材料与附件。',
+  'task:view': '任务查看：只读浏览任务进度与已提交内容。',
+  'task:score': '任务评分：对提交材料进行评分与评审。',
+  'task:approve': '任务审核：审核节点通过或驳回。',
 };
 
 export function buildHelpSections(

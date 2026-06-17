@@ -4,6 +4,8 @@ import com.uqm.common.ApiResponse;
 import com.uqm.common.PageResult;
 import com.uqm.dto.AllocateResultVo;
 import com.uqm.dto.AllocateTaskRequest;
+import com.uqm.dto.BatchDeleteResultVo;
+import com.uqm.dto.ConfirmDeleteRequest;
 import com.uqm.dto.CreateTaskRequest;
 import com.uqm.dto.MyTaskVo;
 import com.uqm.dto.PostInstanceCommentRequest;
@@ -94,8 +96,10 @@ public class TaskController {
     }
 
     @GetMapping("/{taskId}")
-    public ApiResponse<TaskVo> detail(@PathVariable Integer taskId) {
-        return ApiResponse.ok(taskService.getTask(taskId));
+    public ApiResponse<TaskVo> detail(
+            @AuthenticationPrincipal LoginUser user,
+            @PathVariable Integer taskId) {
+        return ApiResponse.ok(taskService.getTask(user, taskId));
     }
 
     @PostMapping("/create")
@@ -139,5 +143,12 @@ public class TaskController {
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {
         return ApiResponse.ok(taskService.stopTask(user, taskId));
+    }
+
+    @PostMapping("/batch-delete")
+    public ApiResponse<BatchDeleteResultVo> batchDelete(
+            @AuthenticationPrincipal LoginUser user,
+            @Valid @RequestBody ConfirmDeleteRequest request) {
+        return ApiResponse.ok(taskService.deleteTasks(user, request));
     }
 }

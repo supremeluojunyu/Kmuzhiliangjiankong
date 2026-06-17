@@ -1,5 +1,6 @@
 package com.uqm.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.uqm.common.BusinessException;
 import com.uqm.common.PageResult;
 import com.uqm.dto.MessageRow;
@@ -8,6 +9,9 @@ import com.uqm.dto.MessageSendTargetVo;
 import com.uqm.dto.MessageVo;
 import com.uqm.dto.SendMessageRequest;
 import com.uqm.entity.Message;
+import com.uqm.entity.MessageReadStatus;
+import com.uqm.entity.MessageTargetGroup;
+import com.uqm.entity.MessageTargetUser;
 import com.uqm.entity.User;
 import com.uqm.entity.UserGroupEntity;
 import com.uqm.mapper.MessageMapper;
@@ -26,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -43,13 +48,15 @@ public class MessageService {
     private final UserGroupQueryMapper userGroupQueryMapper;
     private final UserMapper userMapper;
     private final GroupService groupService;
+    private final OperationLogService operationLogService;
 
-    public PageResult<MessageVo> listMessages(LoginUser user, long page, long pageSize) {
+    public PageResult<MessageVo> listMessages(LoginUser user, long page, long pageSize, String direction) {
+        String dir = normalizeDirection(direction);
         long offset = (page - 1) * pageSize;
         List<MessageRow> rows = messageMapper.listAllForUser(
-                user.getUserId(), offset, pageSize);
-        long total = messageMapper.countAllForUser(user.getUserId());
-        List<MessageVo> list = rows.stream().map(this::toVo).toList();
+                user.getUserId(), dir, offset, pageSize);
+        long total = messageMapper.countAllForUser(user.getUserId(), dir);
+        List<MessageVo> list = rows.stream().map(row -> toVo(row, user.getUserId())).toList();
         return new PageResult<>(list, total, page, pageSize);
     }
 
@@ -116,10 +123,51 @@ public class MessageService {
 
         notifyTargets(message.getTitle(), message.getContent(), groupIds, userIds);
 
+        operationLogService.log(user, "message:send", "message", message.getMessageId(),
+                Map.of("title", message.getTitle(), "targetGroupIds", groupIds, "targetUserIds", userIds));
+
         MessageVo vo = toVoFromEntity(message);
+        vo.setSentByMe(true);
+        vo.setIsRead(true);
         vo.setTargetGroupNames(messageMapper.listTargetGroupNames(message.getMessageId()));
         vo.setTargetUserNames(messageMapper.listTargetUserNames(message.getMessageId()));
         return vo;
+    }
+
+    @Transactional
+    public void deleteMessage(LoginUser user, Integer messageId) {
+        Message message = messageMapper.selectById(messageId);
+        if (message == null) {
+            throw new BusinessException(404, "消息不存在");
+        }
+        if (!canDeleteMessage(user, message)) {
+            throw new BusinessException(403, "无权删除该消息");
+        }
+
+        readStatusMapper.delete(new LambdaQueryWrapper<MessageReadStatus>()
+                .eq(MessageReadStatus::getMessageId, messageId));
+        targetGroupMapper.delete(new LambdaQueryWrapper<MessageTargetGroup>()
+                .eq(MessageTargetGroup::getMessageId, messageId));
+        targetUserMapper.delete(new LambdaQueryWrapper<MessageTargetUser>()
+                .eq(MessageTargetUser::getMessageId, messageId));
+        messageMapper.deleteById(messageId);
+
+        operationLogService.log(user, "message:delete", "message", messageId,
+                Map.of("title", message.getTitle(), "messageType", message.getMessageType()));
+    }
+
+    private boolean canDeleteMessage(LoginUser user, Message message) {
+        if (isMessageAdmin(user)) {
+            return true;
+        }
+        return permissionService.hasPermission(user, "message:send")
+                && user.getUserId().equals(message.getSenderId());
+    }
+
+    private boolean isMessageAdmin(LoginUser user) {
+        return permissionService.hasPermission(user, "user:manage")
+                || permissionService.hasPermission(user, "group:manage")
+                || permissionService.hasPermission(user, "system:config");
     }
 
     @Transactional
@@ -130,7 +178,7 @@ public class MessageService {
 
     @Transactional
     public void markAllRead(LoginUser user) {
-        List<MessageRow> rows = messageMapper.listAllForUser(user.getUserId(), 0, 1000);
+        List<MessageRow> rows = messageMapper.listAllForUser(user.getUserId(), "received", 0, 1000);
         List<Integer> unreadIds = rows.stream()
                 .filter(r -> r.getIsRead() == null || r.getIsRead() == 0)
                 .map(MessageRow::getMessageId)
@@ -140,13 +188,21 @@ public class MessageService {
         }
     }
 
+    private String normalizeDirection(String direction) {
+        if ("sent".equals(direction) || "received".equals(direction)) {
+            return direction;
+        }
+        return "all";
+    }
+
     private void verifyMessageAccess(Integer userId, Integer messageId) {
         if (messageMapper.userCanAccess(userId, messageId) == 0) {
             throw new BusinessException(403, "无权访问该消息");
         }
     }
 
-    private MessageVo toVo(MessageRow row) {
+    private MessageVo toVo(MessageRow row, Integer currentUserId) {
+        boolean sentByMe = currentUserId != null && currentUserId.equals(row.getSenderId());
         MessageVo vo = MessageVo.builder()
                 .messageId(row.getMessageId())
                 .senderId(row.getSenderId())
@@ -157,7 +213,8 @@ public class MessageService {
                 .taskId(row.getTaskId())
                 .instanceId(row.getInstanceId())
                 .sendTime(row.getSendTime())
-                .isRead(row.getIsRead() != null && row.getIsRead() == 1)
+                .isRead(sentByMe || (row.getIsRead() != null && row.getIsRead() == 1))
+                .sentByMe(sentByMe)
                 .build();
         vo.setTargetGroupNames(messageMapper.listTargetGroupNames(row.getMessageId()));
         vo.setTargetUserNames(messageMapper.listTargetUserNames(row.getMessageId()));

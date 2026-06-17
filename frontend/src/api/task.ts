@@ -29,6 +29,7 @@ export interface NodeRecordItem {
   submitData?: Record<string, unknown>;
   startTime?: string;
   endTime?: string;
+  canOperate?: boolean;
 }
 
 export interface MyTaskItem {
@@ -92,6 +93,14 @@ export async function resumeTask(taskId: number) {
 
 export async function stopTask(taskId: number) {
   const { data } = await api.post<ApiResponse<TaskItem>>(`/task/${taskId}/stop`);
+  return data.data;
+}
+
+export async function batchDeleteTasks(ids: number[], confirmPhrase: string) {
+  const { data } = await api.post<ApiResponse<{ deletedCount: number; errors?: string[] }>>(
+    '/task/batch-delete',
+    { ids, confirmPhrase }
+  );
   return data.data;
 }
 

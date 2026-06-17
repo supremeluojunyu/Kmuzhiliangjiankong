@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import * as authApi from '@/api/auth';
-import { clearToken, getToken, setStoredGroupId, setToken } from '@/api/client';
+import { clearAuthStorage, getToken, setStoredGroupId, setToken } from '@/api/client';
 import type { GroupInfo, UserProfile } from '@/types';
 
 interface AuthContextValue {
@@ -24,6 +24,8 @@ interface AuthContextValue {
   canViewStats: () => boolean;
   isCollegeScoped: () => boolean;
   refreshProfile: () => Promise<void>;
+  /** 向后端校验 token，无效则清除本地登录态 */
+  validateSession: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -40,27 +42,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStoredGroupId(profile.currentGroupId);
   }, []);
 
+  const validateSession = useCallback(async (): Promise<boolean> => {
+    if (!getToken()) {
+      setUser(null);
+      setGroups([]);
+      return false;
+    }
+    try {
+      await refreshProfile();
+      return true;
+    } catch {
+      clearAuthStorage();
+      setUser(null);
+      setGroups([]);
+      return false;
+    }
+  }, [refreshProfile]);
+
   const fetchGroups = useCallback(async () => {
     const list = await authApi.fetchGroups();
     setGroups(list);
   }, []);
 
   useEffect(() => {
-    const init = async () => {
-      if (!getToken()) {
-        setLoading(false);
-        return;
-      }
-      try {
-        await refreshProfile();
-      } catch {
-        clearToken();
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
-  }, [refreshProfile]);
+    validateSession().finally(() => setLoading(false));
+  }, [validateSession]);
 
   const login = useCallback(async (account: string, password: string) => {
     const res = await authApi.login(account, password);
@@ -71,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    clearToken();
+    clearAuthStorage();
     setUser(null);
     setGroups([]);
   }, []);
@@ -114,8 +120,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       canViewStats,
       isCollegeScoped,
       refreshProfile,
+      validateSession,
     }),
-    [user, loading, login, logout, groups, setCurrentGroupId, fetchGroups, hasPermission, canViewStats, isCollegeScoped, refreshProfile]
+    [
+      user,
+      loading,
+      login,
+      logout,
+      groups,
+      setCurrentGroupId,
+      fetchGroups,
+      hasPermission,
+      canViewStats,
+      isCollegeScoped,
+      refreshProfile,
+      validateSession,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -3,6 +3,7 @@ import type { ApiResponse } from '@/types';
 import { capacitorHttpAdapter } from '@/api/capacitorHttpAdapter';
 import { isMobileApp } from '@/utils/app';
 import { formatApiError, getApiPrefix } from '@/utils/serverConfig';
+import { buildLoginUrl } from '@/utils/authRedirect';
 
 const TOKEN_KEY = 'uqm_token';
 const GROUP_KEY = 'uqm_current_group_id';
@@ -17,6 +18,12 @@ export const getStoredGroupId = () => {
 };
 export const setStoredGroupId = (groupId: number) =>
   localStorage.setItem(GROUP_KEY, String(groupId));
+export const clearStoredGroupId = () => localStorage.removeItem(GROUP_KEY);
+
+export const clearAuthStorage = () => {
+  clearToken();
+  clearStoredGroupId();
+};
 
 const api = axios.create({
   timeout: 30000,
@@ -39,6 +46,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => {
     const body = res.data as ApiResponse<unknown>;
+    if (body.code === 401) {
+      clearAuthStorage();
+      const path = window.location.pathname + window.location.search;
+      if (!path.startsWith('/login')) {
+        window.location.replace(buildLoginUrl(path));
+      }
+      return Promise.reject(new Error(body.message || '未登录或登录已过期'));
+    }
     if (body.code !== 0) {
       return Promise.reject(new Error(body.message || '请求失败'));
     }
@@ -46,8 +61,11 @@ api.interceptors.response.use(
   },
   (err) => {
     if (err.response?.status === 401) {
-      clearToken();
-      window.location.href = '/login';
+      clearAuthStorage();
+      const path = window.location.pathname + window.location.search;
+      if (!path.startsWith('/login')) {
+        window.location.replace(buildLoginUrl(path));
+      }
       return Promise.reject(err);
     }
     const body = err.response?.data as ApiResponse<unknown> | undefined;

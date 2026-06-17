@@ -1,4 +1,4 @@
-import { PlusOutlined } from '@ant-design/icons';
+import { PlusOutlined, UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   Button,
   Form,
@@ -13,25 +13,55 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import type { Key } from 'react';
 import { useEffect, useState } from 'react';
 import { fetchColleges } from '@/api/auth';
 import { fetchAllGroups } from '@/api/group';
-import { createUser, fetchUsers, updateUser, type UserManageItem } from '@/api/userManage';
+import {
+  batchDeleteUsers,
+  createUser,
+  fetchUsers,
+  updateUser,
+  downloadUserImportTemplate,
+  importUsersFromExcel,
+  type UserManageItem,
+} from '@/api/userManage';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import ImportExcelModal from '@/components/ImportExcelModal';
+import { DELETE_CONFIRM_PHRASE } from '@/constants/deleteConfirm';
 import { useAuth } from '@/contexts/AuthContext';
 import type { College } from '@/types';
 
+function showDeleteResult(result: { deletedCount: number; errors?: string[] }) {
+  if (result.deletedCount > 0) {
+    message.success(`已删除 ${result.deletedCount} 个用户`);
+  }
+  if (result.errors?.length) {
+    Modal.warning({
+      title: '部分用户删除失败',
+      content: (
+        <div style={{ whiteSpace: 'pre-wrap' }}>{result.errors.join('\n')}</div>
+      ),
+    });
+  }
+}
+
 export default function UsersPage() {
-  const { isCollegeScoped } = useAuth();
+  const { isCollegeScoped, user: currentUser } = useAuth();
   const [list, setList] = useState<UserManageItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<UserManageItem | null>(null);
   const [colleges, setColleges] = useState<College[]>([]);
   const [groups, setGroups] = useState<{ groupId: number; groupName: string }[]>([]);
   const [form] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async (p = page, kw = keyword) => {
     setLoading(true);
@@ -39,6 +69,7 @@ export default function UsersPage() {
       const res = await fetchUsers(p, 20, kw || undefined);
       setList(res.list);
       setTotal(res.total);
+      setSelectedRowKeys([]);
     } finally {
       setLoading(false);
     }
@@ -114,6 +145,23 @@ export default function UsersPage() {
     }
   };
 
+  const handleBatchDelete = async () => {
+    setDeleting(true);
+    try {
+      const result = await batchDeleteUsers(
+        selectedRowKeys.map(Number),
+        DELETE_CONFIRM_PHRASE
+      );
+      setDeleteOpen(false);
+      showDeleteResult(result);
+      load(page, keyword);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '删除失败');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const columns: ColumnsType<UserManageItem> = [
     { title: '姓名', dataIndex: 'name' },
     { title: '账号', dataIndex: 'account' },
@@ -147,6 +195,17 @@ export default function UsersPage() {
             onSearch={(v) => { setKeyword(v); setPage(1); load(1, v); }}
             style={{ width: 200 }}
           />
+          <Button
+            danger
+            icon={<DeleteOutlined />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={() => setDeleteOpen(true)}
+          >
+            删除{selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ''}
+          </Button>
+          <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+            批量导入
+          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增用户</Button>
         </Space>
       </Space>
@@ -155,7 +214,25 @@ export default function UsersPage() {
         loading={loading}
         columns={columns}
         dataSource={list}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+          getCheckboxProps: (record) => ({
+            disabled: record.userId === 1
+              || record.userId === currentUser?.userId
+              || record.deletable === false,
+          }),
+        }}
         pagination={{ current: page, total, pageSize: 20, onChange: setPage }}
+      />
+      <ConfirmDeleteModal
+        open={deleteOpen}
+        title="删除用户"
+        description="将级联删除该用户创建/参与的任务（已暂停或已停止）、任务模板、消息及相关数据。仍有进行中任务的用户不可删除。"
+        count={selectedRowKeys.length}
+        loading={deleting}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={handleBatchDelete}
       />
       <Modal
         title={editing ? '编辑用户' : '新增用户'}
@@ -200,6 +277,15 @@ export default function UsersPage() {
           )}
         </Form>
       </Modal>
+      <ImportExcelModal
+        open={importOpen}
+        title="批量导入用户"
+        description="请先下载模板，按示例填写后上传。所属组、默认组请填写系统中已有的组名称，多个组用逗号分隔。账号已存在时将自动跳过。"
+        onClose={() => setImportOpen(false)}
+        onDownloadTemplate={downloadUserImportTemplate}
+        onImport={importUsersFromExcel}
+        onSuccess={() => load(page, keyword)}
+      />
     </div>
   );
 }

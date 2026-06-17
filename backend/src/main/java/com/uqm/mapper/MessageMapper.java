@@ -12,8 +12,11 @@ import java.util.List;
 @Mapper
 public interface MessageMapper extends BaseMapper<Message> {
 
-    String USER_MESSAGE_ACCESS = """
-            (
+    @Select("""
+            <script>
+            SELECT COUNT(DISTINCT m.message_id) FROM message m
+            LEFT JOIN message_read_status mrs ON mrs.message_id = m.message_id AND mrs.user_id = #{userId}
+            WHERE (
               EXISTS (
                 SELECT 1 FROM message_target_user mtu
                 WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
@@ -24,20 +27,28 @@ public interface MessageMapper extends BaseMapper<Message> {
                 WHERE mtg.message_id = m.message_id
               )
             )
-            """;
-
-    @Select("""
-            SELECT COUNT(DISTINCT m.message_id) FROM message m
-            LEFT JOIN message_read_status mrs ON mrs.message_id = m.message_id AND mrs.user_id = #{userId}
-            WHERE """ + USER_MESSAGE_ACCESS + """
+              AND m.sender_id &lt;&gt; #{userId}
               AND (mrs.is_read IS NULL OR mrs.is_read = 0)
+            </script>
             """)
     long countUnreadAllGroups(@Param("userId") Integer userId);
 
     @Select("""
+            <script>
             SELECT COUNT(DISTINCT m.message_id) FROM message m
             LEFT JOIN message_read_status mrs ON mrs.message_id = m.message_id AND mrs.user_id = #{userId}
-            WHERE """ + USER_MESSAGE_ACCESS + """
+            WHERE (
+              EXISTS (
+                SELECT 1 FROM message_target_user mtu
+                WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+              )
+              OR EXISTS (
+                SELECT 1 FROM message_target_group mtg
+                JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                WHERE mtg.message_id = m.message_id
+              )
+            )
+              AND m.sender_id &lt;&gt; #{userId}
               AND (
                 EXISTS (SELECT 1 FROM message_target_group mtg WHERE mtg.message_id = m.message_id AND mtg.group_id = #{groupId})
                 OR EXISTS (
@@ -47,10 +58,12 @@ public interface MessageMapper extends BaseMapper<Message> {
                 )
               )
               AND (mrs.is_read IS NULL OR mrs.is_read = 0)
+            </script>
             """)
     long countUnreadByGroup(@Param("userId") Integer userId, @Param("groupId") Integer groupId);
 
     @Select("""
+            <script>
             SELECT DISTINCT m.message_id AS messageId, m.sender_id AS senderId, m.title, m.content,
                    m.message_type AS messageType, m.task_id AS taskId, m.instance_id AS instanceId,
                    m.send_time AS sendTime, u.name AS senderName,
@@ -58,18 +71,79 @@ public interface MessageMapper extends BaseMapper<Message> {
             FROM message m
             LEFT JOIN `user` u ON u.user_id = m.sender_id
             LEFT JOIN message_read_status mrs ON mrs.message_id = m.message_id AND mrs.user_id = #{userId}
-            WHERE """ + USER_MESSAGE_ACCESS + """
+            WHERE (
+              m.sender_id = #{userId}
+              OR EXISTS (
+                SELECT 1 FROM message_target_user mtu
+                WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+              )
+              OR EXISTS (
+                SELECT 1 FROM message_target_group mtg
+                JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                WHERE mtg.message_id = m.message_id
+              )
+            )
+            <if test="direction == 'sent'">
+              AND m.sender_id = #{userId}
+            </if>
+            <if test="direction == 'received'">
+              AND m.sender_id &lt;&gt; #{userId}
+              AND (
+                EXISTS (
+                  SELECT 1 FROM message_target_user mtu
+                  WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM message_target_group mtg
+                  JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                  WHERE mtg.message_id = m.message_id
+                )
+              )
+            </if>
             ORDER BY m.send_time DESC
             LIMIT #{offset}, #{pageSize}
+            </script>
             """)
     List<MessageRow> listAllForUser(@Param("userId") Integer userId,
+                                    @Param("direction") String direction,
                                     @Param("offset") long offset,
                                     @Param("pageSize") long pageSize);
 
     @Select("""
+            <script>
             SELECT COUNT(DISTINCT m.message_id) FROM message m
-            WHERE """ + USER_MESSAGE_ACCESS)
-    long countAllForUser(@Param("userId") Integer userId);
+            WHERE (
+              m.sender_id = #{userId}
+              OR EXISTS (
+                SELECT 1 FROM message_target_user mtu
+                WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+              )
+              OR EXISTS (
+                SELECT 1 FROM message_target_group mtg
+                JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                WHERE mtg.message_id = m.message_id
+              )
+            )
+            <if test="direction == 'sent'">
+              AND m.sender_id = #{userId}
+            </if>
+            <if test="direction == 'received'">
+              AND m.sender_id &lt;&gt; #{userId}
+              AND (
+                EXISTS (
+                  SELECT 1 FROM message_target_user mtu
+                  WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM message_target_group mtg
+                  JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                  WHERE mtg.message_id = m.message_id
+                )
+              )
+            </if>
+            </script>
+            """)
+    long countAllForUser(@Param("userId") Integer userId, @Param("direction") String direction);
 
     @Select("""
             SELECT g.group_name FROM message_target_group mtg
@@ -88,7 +162,19 @@ public interface MessageMapper extends BaseMapper<Message> {
     @Select("""
             SELECT COUNT(*) FROM message m
             WHERE m.message_id = #{messageId}
-              AND """ + USER_MESSAGE_ACCESS)
+              AND (
+                m.sender_id = #{userId}
+                OR EXISTS (
+                  SELECT 1 FROM message_target_user mtu
+                  WHERE mtu.message_id = m.message_id AND mtu.user_id = #{userId}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM message_target_group mtg
+                  JOIN user_group ug ON ug.group_id = mtg.group_id AND ug.user_id = #{userId}
+                  WHERE mtg.message_id = m.message_id
+                )
+              )
+            """)
     long userCanAccess(@Param("userId") Integer userId, @Param("messageId") Integer messageId);
 
     @Select("""

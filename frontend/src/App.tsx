@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BrandingProvider } from '@/contexts/BrandingContext';
 import AppLayout from '@/layouts/AppLayout';
@@ -21,10 +21,18 @@ import AuthCallbackPage from '@/pages/AuthCallbackPage';
 import TasksPage from '@/pages/TasksPage';
 import DownloadPage from '@/pages/DownloadPage';
 import AppUpdateChecker from '@/components/AppUpdateChecker';
+import GuestOnly from '@/components/GuestOnly';
+import RequireAuth from '@/components/RequireAuth';
 import { Spin } from 'antd';
 import { getDefaultHomePath, isMobileApp } from '@/utils/app';
+import { buildLoginUrl } from '@/utils/authRedirect';
+import { getToken } from '@/api/client';
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function AppShell() {
+  return isMobileApp() ? <MobileLayout /> : <AppLayout />;
+}
+
+function RootRedirect() {
   const { user, loading } = useAuth();
   if (loading) {
     return (
@@ -33,12 +41,23 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  if (!user || !getToken()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <Navigate to={getDefaultHomePath()} replace />;
 }
 
-function AppShell() {
-  return isMobileApp() ? <MobileLayout /> : <AppLayout />;
+function UnknownRouteGuard() {
+  const location = useLocation();
+  const from = location.pathname + location.search;
+  if (!getToken()) {
+    return <Navigate to={buildLoginUrl(from)} replace />;
+  }
+  return (
+    <RequireAuth>
+      <RootRedirect />
+    </RequireAuth>
+  );
 }
 
 function AppRoutes() {
@@ -46,15 +65,22 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/login"
+        element={
+          <GuestOnly>
+            <LoginPage />
+          </GuestOnly>
+        }
+      />
       <Route path="/login/callback" element={<AuthCallbackPage />} />
       <Route path="/download" element={<DownloadPage />} />
       <Route
         path="/"
         element={
-          <PrivateRoute>
+          <RequireAuth>
             <AppShell />
-          </PrivateRoute>
+          </RequireAuth>
         }
       >
         <Route index element={isMobileApp() ? <Navigate to={homePath} replace /> : <DashboardPage />} />
@@ -72,7 +98,7 @@ function AppRoutes() {
         <Route path="logs" element={<OperationLogsPage />} />
         <Route path="settings" element={<SystemSettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={homePath} replace />} />
+      <Route path="*" element={<UnknownRouteGuard />} />
     </Routes>
   );
 }

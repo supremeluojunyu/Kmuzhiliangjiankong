@@ -19,6 +19,8 @@ public class MessageVo {
     private Integer instanceId;
     private LocalDateTime sendTime;
     private Boolean isRead;
+    /** 是否为当前用户发出的消息 */
+    private Boolean sentByMe;
     private List<String> targetGroupNames;
     private List<String> targetUserNames;
 }

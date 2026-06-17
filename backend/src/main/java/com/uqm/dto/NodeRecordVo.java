@@ -20,4 +20,6 @@ public class NodeRecordVo {
     private Map<String, Object> submitData;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    /** 当前身份组是否可操作该节点（进行中/草稿且归属本组） */
+    private Boolean canOperate;
 }

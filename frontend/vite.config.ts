@@ -20,6 +20,23 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            const remote = req.socket?.remoteAddress?.replace(/^::ffff:/, '');
+            const incomingXff = req.headers['x-forwarded-for'];
+            const incomingRealIp = req.headers['x-real-ip'];
+            if (incomingXff) {
+              proxyReq.setHeader('X-Forwarded-For', String(incomingXff));
+            } else if (remote) {
+              proxyReq.setHeader('X-Forwarded-For', remote);
+            }
+            if (incomingRealIp) {
+              proxyReq.setHeader('X-Real-IP', String(incomingRealIp));
+            } else if (remote) {
+              proxyReq.setHeader('X-Real-IP', remote);
+            }
+          });
+        },
       },
     },
   },

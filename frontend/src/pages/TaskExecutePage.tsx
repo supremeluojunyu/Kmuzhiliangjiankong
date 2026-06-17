@@ -41,8 +41,7 @@ const nodeTypeLabel: Record<string, string> = {
 export default function TaskExecutePage() {
   const { instanceId } = useParams();
   const navigate = useNavigate();
-  const { currentGroupId, hasPermission } = useAuth();
-  const canViewAll = hasPermission('stat:view_all') || hasPermission('system:config');
+  const { currentGroupId } = useAuth();
   const [task, setTask] = useState<MyTaskItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -67,11 +66,7 @@ export default function TaskExecutePage() {
     try {
       const data = await fetchInstance(Number(instanceId));
       setTask(data);
-      const active = data.nodeRecords?.find(
-        (n) =>
-          (n.status === 'in_progress' || n.status === 'draft')
-          && n.executeGroupId === currentGroupId
-      );
+      const active = data.nodeRecords?.find((n) => n.canOperate);
       if (active?.submitData) {
         form.setFieldsValue(active.submitData);
         const files = (active.submitData.files as { name: string; path: string }[]) || [];
@@ -100,22 +95,18 @@ export default function TaskExecutePage() {
     return () => window.removeEventListener('identity-changed', onIdentity);
   }, [instanceId, currentGroupId]);
 
-  const visibleNodes = task?.fullView || canViewAll
-    ? (task?.nodeRecords || [])
-    : (task?.nodeRecords || []);
+  const visibleNodes = task?.nodeRecords || [];
 
-  const activeNode = visibleNodes.find(
-    (n) =>
-      (n.status === 'in_progress' || n.status === 'draft')
-      && (task?.fullView || canViewAll || n.executeGroupId === currentGroupId)
-  );
+  const activeNode = visibleNodes.find((n) => n.canOperate);
+
+  const globalCurrentNode = task.currentNodeId
+    ? visibleNodes.find((n) => n.nodeId === task.currentNodeId)
+    : visibleNodes.find((n) => n.status === 'in_progress' || n.status === 'draft');
 
   const waitingOnOtherGroup = !activeNode
-    && !task?.fullView
-    && !canViewAll
-    && task?.status !== 'completed'
-    && visibleNodes.some((n) => n.status === 'completed')
-    && !visibleNodes.some((n) => n.status === 'in_progress' || n.status === 'draft');
+    && task.status !== 'completed'
+    && globalCurrentNode != null
+    && globalCurrentNode.executeGroupId !== currentGroupId;
 
   const referenceMaterials = task?.referenceMaterials || [];
 
@@ -185,17 +176,22 @@ export default function TaskExecutePage() {
   }
 
   const stepItems = visibleNodes.map((n) => {
-    const isMine = task?.fullView || canViewAll || n.executeGroupId === currentGroupId;
+    const isMine = n.executeGroupId === currentGroupId;
+    const isGlobalCurrent = task.currentNodeId
+      ? n.nodeId === task.currentNodeId
+      : n.status === 'in_progress' || n.status === 'draft';
     const typeLabel = nodeTypeLabel[n.nodeType] || n.nodeType;
     const groupHint = n.executeGroupName ? ` · ${n.executeGroupName}` : '';
+    let stepStatus: 'finish' | 'process' | 'wait' = 'wait';
+    if (n.status === 'completed') {
+      stepStatus = 'finish';
+    } else if (isGlobalCurrent || n.canOperate) {
+      stepStatus = 'process';
+    }
     return {
       title: n.nodeName || n.nodeId,
-      description: `${typeLabel}${groupHint}${isMine ? '（本组负责）' : ''}`,
-      status: (n.status === 'completed'
-        ? 'finish'
-        : n.status === 'in_progress' || n.status === 'draft'
-          ? isMine ? 'process' : 'wait'
-          : 'wait') as 'finish' | 'process' | 'wait',
+      description: `${typeLabel}${groupHint}${isMine ? '（本组负责）' : ''}${isGlobalCurrent && !isMine ? '（进行中）' : ''}`,
+      status: stepStatus,
     };
   });
 
@@ -353,7 +349,13 @@ export default function TaskExecutePage() {
       ) : waitingOnOtherGroup ? (
         <Card>
           <Typography.Text type="secondary">
-            您负责的节点已完成，请等待其他执行组处理后续流程。
+            当前流程由
+            {globalCurrentNode?.executeGroupName ? `「${globalCurrentNode.executeGroupName}」` : '其他执行组'}
+            处理节点「{globalCurrentNode?.nodeName || task.currentNodeName || '未知'}」
+            （{nodeTypeLabel[globalCurrentNode?.nodeType || task.currentNodeType || ''] || '处理中'}）。
+            {visibleNodes.some((n) => n.executeGroupId === currentGroupId && n.status === 'completed')
+              ? ' 您负责的节点已完成，请等待该节点完成后再进行后续操作。'
+              : ' 该节点尚未轮到本组操作，请耐心等待。'}
           </Typography.Text>
         </Card>
       ) : task.status === 'completed' ? (

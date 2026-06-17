@@ -31,6 +31,16 @@ for i in $(seq 1 60); do
 done
 
 echo ""
+echo "==> 执行数据库增量迁移..."
+chmod +x "$ROOT/scripts/migrate-db.sh"
+DB_HOST="${DB_HOST:-127.0.0.1}" \
+DB_PORT="${MYSQL_PORT:-3306}" \
+DB_NAME="${DB_NAME:-uqm}" \
+DB_USER="${DB_USER:-uqm}" \
+DB_PASSWORD="${DB_PASSWORD:-uqm_dev_2026}" \
+  "$ROOT/scripts/migrate-db.sh" || echo "警告: 迁移未成功，请手动执行 ./scripts/migrate-db.sh"
+
+echo ""
 echo "前端: http://localhost:${FRONTEND_PORT:-80}"
 echo "后端: http://localhost:${BACKEND_PORT:-8080}"
 echo "健康检查: http://localhost:${BACKEND_PORT:-8080}/api/health"

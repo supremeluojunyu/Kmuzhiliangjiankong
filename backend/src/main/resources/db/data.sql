@@ -26,7 +26,11 @@ INSERT INTO `permission` (`permission_code`, `permission_name`) VALUES
 ('data:export', '导出数据'),
 ('user:manage', '用户管理'),
 ('group:manage', '组管理'),
-('system:config', '系统配置管理');
+('system:config', '系统配置管理'),
+('task:submit', '提交材料'),
+('task:view', '只读查看'),
+('task:score', '评分评审'),
+('task:approve', '审核任务');
 
 -- 系统管理员组拥有全部权限
 INSERT INTO `group_permission` (`group_id`, `permission_id`)
@@ -47,6 +51,26 @@ SELECT 2, permission_id FROM `permission` WHERE permission_code != 'group:manage
 INSERT INTO `group_permission` (`group_id`, `permission_id`)
 SELECT 3, permission_id FROM `permission`
 WHERE permission_code IN ('task:create', 'task:allocate', 'message:send', 'data:export', 'stat:view_college', 'user:manage');
+
+-- 专家/评审组：评分、审核
+INSERT INTO `group_permission` (`group_id`, `permission_id`)
+SELECT 4, permission_id FROM `permission`
+WHERE permission_code IN ('task:score', 'task:approve', 'message:send', 'stat:view_all', 'data:export');
+
+-- 材料提交组
+INSERT INTO `group_permission` (`group_id`, `permission_id`)
+SELECT 5, permission_id FROM `permission`
+WHERE permission_code IN ('task:submit', 'message:send');
+
+-- 查看组
+INSERT INTO `group_permission` (`group_id`, `permission_id`)
+SELECT 6, permission_id FROM `permission`
+WHERE permission_code IN ('task:view', 'stat:view_college');
+
+-- 评分组
+INSERT INTO `group_permission` (`group_id`, `permission_id`)
+SELECT 7, permission_id FROM `permission`
+WHERE permission_code IN ('task:score', 'message:send');
 
 -- 默认管理员 admin / admin123 (BCrypt)
 INSERT INTO `user` (`name`, `college_id`, `account`, `password`, `status`) VALUES
