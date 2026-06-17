@@ -41,7 +41,7 @@ public class CollegeManageController {
         return ApiResponse.ok(collegeManageService.create(user, request));
     }
 
-    @PutMapping("/{collegeId}")
+    @PutMapping("/{collegeId:\\d+}")
     public ApiResponse<CollegeManageVo> update(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer collegeId,
@@ -49,7 +49,7 @@ public class CollegeManageController {
         return ApiResponse.ok(collegeManageService.update(user, collegeId, request));
     }
 
-    @DeleteMapping("/{collegeId}")
+    @DeleteMapping("/{collegeId:\\d+}")
     public ApiResponse<Void> delete(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer collegeId) {

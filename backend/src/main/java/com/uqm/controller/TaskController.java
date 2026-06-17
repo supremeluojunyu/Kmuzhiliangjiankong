@@ -48,7 +48,7 @@ public class TaskController {
         return ApiResponse.ok(executionService.listMyTasks(user, page, pageSize, filter));
     }
 
-    @GetMapping("/instance/{instanceId}")
+    @GetMapping("/instance/{instanceId:\\d+}")
     public ApiResponse<MyTaskVo> instanceDetail(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer instanceId) {
@@ -62,7 +62,7 @@ public class TaskController {
         return ApiResponse.ok(allocationService.allocate(user, request));
     }
 
-    @PostMapping("/submit/{instanceId}/{nodeId}")
+    @PostMapping("/submit/{instanceId:\\d+}/{nodeId}")
     public ApiResponse<MyTaskVo> submit(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer instanceId,
@@ -71,14 +71,14 @@ public class TaskController {
         return ApiResponse.ok(executionService.submitNode(user, instanceId, nodeId, request));
     }
 
-    @GetMapping("/instance/{instanceId}/comments")
+    @GetMapping("/instance/{instanceId:\\d+}/comments")
     public ApiResponse<java.util.List<MessageVo>> listComments(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer instanceId) {
         return ApiResponse.ok(commentService.listComments(user, instanceId));
     }
 
-    @PostMapping("/instance/{instanceId}/comments")
+    @PostMapping("/instance/{instanceId:\\d+}/comments")
     public ApiResponse<MessageVo> postComment(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer instanceId,
@@ -95,7 +95,7 @@ public class TaskController {
         return ApiResponse.ok(taskService.listTasks(user, page, pageSize, status));
     }
 
-    @GetMapping("/{taskId}")
+    @GetMapping("/{taskId:\\d+}")
     public ApiResponse<TaskVo> detail(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {
@@ -109,7 +109,7 @@ public class TaskController {
         return ApiResponse.ok(taskService.createTask(user, request));
     }
 
-    @PutMapping("/{taskId}")
+    @PutMapping("/{taskId:\\d+}")
     public ApiResponse<TaskVo> update(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId,
@@ -117,28 +117,28 @@ public class TaskController {
         return ApiResponse.ok(taskService.updateTask(user, taskId, request));
     }
 
-    @PostMapping("/publish/{taskId}")
+    @PostMapping("/publish/{taskId:\\d+}")
     public ApiResponse<TaskVo> publish(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {
         return ApiResponse.ok(taskService.publishTask(user, taskId));
     }
 
-    @PostMapping("/{taskId}/pause")
+    @PostMapping("/{taskId:\\d+}/pause")
     public ApiResponse<TaskVo> pause(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {
         return ApiResponse.ok(taskService.pauseTask(user, taskId));
     }
 
-    @PostMapping("/{taskId}/resume")
+    @PostMapping("/{taskId:\\d+}/resume")
     public ApiResponse<TaskVo> resume(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {
         return ApiResponse.ok(taskService.resumeTask(user, taskId));
     }
 
-    @PostMapping("/{taskId}/stop")
+    @PostMapping("/{taskId:\\d+}/stop")
     public ApiResponse<TaskVo> stop(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer taskId) {

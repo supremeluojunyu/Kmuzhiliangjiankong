@@ -45,7 +45,7 @@ public class UserManageController {
         return ApiResponse.ok(userManageService.list(user, page, pageSize, keyword));
     }
 
-    @GetMapping("/{userId}")
+    @GetMapping("/{userId:\\d+}")
     public ApiResponse<UserManageVo> detail(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer userId) {
@@ -59,7 +59,7 @@ public class UserManageController {
         return ApiResponse.ok(userManageService.create(user, request));
     }
 
-    @PutMapping("/{userId}")
+    @PutMapping("/{userId:\\d+}")
     public ApiResponse<UserManageVo> update(
             @AuthenticationPrincipal LoginUser user,
             @PathVariable Integer userId,

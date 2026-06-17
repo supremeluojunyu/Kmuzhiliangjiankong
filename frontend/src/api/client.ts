@@ -70,7 +70,7 @@ api.interceptors.response.use(
     }
     const body = err.response?.data as ApiResponse<unknown> | undefined;
     const msg = body?.message || formatApiError(err);
-    return Promise.reject(new Error(msg));
+    return Promise.reject(new Error(msg || `请求失败 (${err.response?.status ?? '网络错误'})`));
   }
 );
 
