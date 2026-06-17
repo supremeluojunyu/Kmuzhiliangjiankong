@@ -1,6 +1,7 @@
 import { Card, Collapse, Typography } from 'antd';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildHelpSections } from '@/config/helpContent';
+import { isMobileApp } from '@/utils/app';
 
 export default function HelpPage() {
   const { user } = useAuth();
@@ -12,7 +13,7 @@ export default function HelpPage() {
 
   return (
     <div>
-      <Typography.Title level={4}>使用帮助</Typography.Title>
+      {!isMobileApp() && <Typography.Title level={4}>使用帮助</Typography.Title>}
       <Typography.Paragraph type="secondary">
         以下内容根据您当前登录身份（{user?.account} · {user?.currentGroupName}）自动生成，说明可用功能与操作步骤。
       </Typography.Paragraph>

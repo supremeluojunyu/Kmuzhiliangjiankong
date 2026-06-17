@@ -17,7 +17,7 @@ import { getAppVersion } from '@/utils/appVersion';
 import { isMobileApp } from '@/utils/app';
 
 export default function ProfilePage() {
-  const { user, logout, groups } = useAuth();
+  const { user, logout, groups, hasPermission } = useAuth();
   const { branding } = useBranding();
   const navigate = useNavigate();
   const [configOpen, setConfigOpen] = useState(false);
@@ -29,6 +29,14 @@ export default function ProfilePage() {
       label: '使用帮助',
       onClick: () => navigate('/help'),
     },
+    ...(hasPermission('system:config')
+      ? [{
+          key: 'settings',
+          icon: <SettingOutlined />,
+          label: '系统配置',
+          onClick: () => navigate('/settings'),
+        }]
+      : []),
     {
       key: 'update',
       icon: <CloudDownloadOutlined />,
@@ -48,7 +56,7 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="mobile-page profile-page">
+    <div className="profile-page">
       <Card bordered={false} className="profile-card">
         <Space align="center" size="middle">
           <Avatar size={64} icon={<UserOutlined />} style={{ background: branding.primaryColor }} />

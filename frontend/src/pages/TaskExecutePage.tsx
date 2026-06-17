@@ -99,11 +99,13 @@ export default function TaskExecutePage() {
 
   const activeNode = visibleNodes.find((n) => n.canOperate);
 
-  const globalCurrentNode = task.currentNodeId
-    ? visibleNodes.find((n) => n.nodeId === task.currentNodeId)
+  const currentNodeId = task?.currentNodeId;
+  const globalCurrentNode = currentNodeId
+    ? visibleNodes.find((n) => n.nodeId === currentNodeId)
     : visibleNodes.find((n) => n.status === 'in_progress' || n.status === 'draft');
 
   const waitingOnOtherGroup = !activeNode
+    && task != null
     && task.status !== 'completed'
     && globalCurrentNode != null
     && globalCurrentNode.executeGroupId !== currentGroupId;
@@ -171,8 +173,19 @@ export default function TaskExecutePage() {
     }
   };
 
-  if (loading || !task) {
+  if (loading) {
     return <Typography.Text>加载中...</Typography.Text>;
+  }
+
+  if (!task) {
+    return (
+      <Space direction="vertical">
+        <Typography.Text type="secondary">任务不存在或加载失败</Typography.Text>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/my-tasks')}>
+          返回我的任务
+        </Button>
+      </Space>
+    );
   }
 
   const stepItems = visibleNodes.map((n) => {

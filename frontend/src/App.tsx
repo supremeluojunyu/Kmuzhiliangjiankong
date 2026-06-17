@@ -25,14 +25,28 @@ import GuestOnly from '@/components/GuestOnly';
 import RequireAuth from '@/components/RequireAuth';
 import { Spin } from 'antd';
 import { getDefaultHomePath, isMobileApp } from '@/utils/app';
+import { useViewport } from '@/hooks/useViewport';
 import { buildLoginUrl } from '@/utils/authRedirect';
 import { getToken } from '@/api/client';
 
 function AppShell() {
-  return isMobileApp() ? <MobileLayout /> : <AppLayout />;
+  const { isNarrow } = useViewport();
+  if (isMobileApp() || isNarrow) {
+    return <MobileLayout />;
+  }
+  return <AppLayout />;
+}
+
+function IndexPage() {
+  const { isNarrow } = useViewport();
+  if (isMobileApp() || isNarrow) {
+    return <Navigate to="/my-tasks" replace />;
+  }
+  return <DashboardPage />;
 }
 
 function RootRedirect() {
+  const { isNarrow } = useViewport();
   const { user, loading } = useAuth();
   if (loading) {
     return (
@@ -44,7 +58,8 @@ function RootRedirect() {
   if (!user || !getToken()) {
     return <Navigate to="/login" replace />;
   }
-  return <Navigate to={getDefaultHomePath()} replace />;
+  const home = isMobileApp() || isNarrow ? '/my-tasks' : getDefaultHomePath();
+  return <Navigate to={home} replace />;
 }
 
 function UnknownRouteGuard() {
@@ -61,8 +76,6 @@ function UnknownRouteGuard() {
 }
 
 function AppRoutes() {
-  const homePath = getDefaultHomePath();
-
   return (
     <Routes>
       <Route
@@ -83,7 +96,7 @@ function AppRoutes() {
           </RequireAuth>
         }
       >
-        <Route index element={isMobileApp() ? <Navigate to={homePath} replace /> : <DashboardPage />} />
+        <Route index element={<IndexPage />} />
         <Route path="messages" element={<MessagesPage />} />
         <Route path="profile" element={<ProfilePage />} />
         <Route path="help" element={<HelpPage />} />

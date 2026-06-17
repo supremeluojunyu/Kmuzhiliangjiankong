@@ -16,6 +16,7 @@ import IdentitySwitcher from '@/components/IdentitySwitcher';
 import MessageBell from '@/components/MessageBell';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBranding } from '@/contexts/BrandingContext';
+import { useViewport } from '@/hooks/useViewport';
 import { isMobileApp } from '@/utils/app';
 
 const { Header, Sider, Content } = Layout;
@@ -25,6 +26,7 @@ export default function AppLayout() {
   const { branding, logoSrc } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isCompact, isShort } = useViewport();
 
   if (loading) {
     return (
@@ -39,11 +41,10 @@ export default function AppLayout() {
     || hasPermission('group:manage')
     || hasPermission('system:config');
 
-  const menuItems = [
+  const mainMenuItems = [
     ...(!mobileMode ? [{ key: '/', icon: <DashboardOutlined />, label: '工作台' }] : []),
     { key: '/my-tasks', icon: <ScheduleOutlined />, label: '我的任务' },
     { key: '/messages', icon: <MailOutlined />, label: '消息中心' },
-    { key: '/help', icon: <QuestionCircleOutlined />, label: '使用帮助' },
     ...(hasPermission('task:create') || hasPermission('task:config')
       ? [{ key: '/tasks', icon: <ProfileOutlined />, label: '任务管理' }]
       : []),
@@ -56,14 +57,33 @@ export default function AppLayout() {
     ...(canViewLogs && !mobileMode
       ? [{ key: '/logs', icon: <FileTextOutlined />, label: '操作日志' }]
       : []),
+  ];
+
+  const footerMenuItems = [
+    { key: '/help', icon: <QuestionCircleOutlined />, label: '使用帮助' },
     ...(hasPermission('system:config')
       ? [{ key: '/settings', icon: <SettingOutlined />, label: '系统配置' }]
       : []),
   ];
 
+  const selectedKey = location.pathname.startsWith('/tasks') ? '/tasks'
+    : location.pathname.startsWith('/my-tasks') ? '/my-tasks'
+    : location.pathname.startsWith('/logs') ? '/logs'
+    : location.pathname.startsWith('/settings') ? '/settings'
+    : location.pathname.startsWith('/help') ? '/help'
+    : location.pathname;
+
   return (
-    <Layout className="app-layout">
-      <Sider breakpoint="lg" collapsedWidth={64} theme="dark">
+    <Layout
+      className={`app-layout${isCompact ? ' app-layout--compact' : ''}${isShort ? ' app-layout--short' : ''}`}
+    >
+      <Sider
+        breakpoint="lg"
+        collapsedWidth={56}
+        width={220}
+        theme="dark"
+        className="app-sider"
+      >
         <div className="logo">
           {logoSrc ? (
             <img src={logoSrc} alt="" className="sidebar-logo-img" />
@@ -71,31 +91,37 @@ export default function AppLayout() {
             branding.siteShortName
           )}
         </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[
-            location.pathname.startsWith('/tasks') ? '/tasks'
-              : location.pathname.startsWith('/my-tasks') ? '/my-tasks'
-              : location.pathname.startsWith('/logs') ? '/logs'
-              : location.pathname.startsWith('/settings') ? '/settings'
-              : location.pathname.startsWith('/help') ? '/help'
-              : location.pathname,
-          ]}
-          items={menuItems}
-          onClick={({ key }) => navigate(key)}
-        />
+        <div className="sidebar-body">
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={mainMenuItems}
+            onClick={({ key }) => navigate(key)}
+            className="sidebar-menu sidebar-menu-main"
+          />
+        </div>
+        <div className="sidebar-footer">
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={[selectedKey]}
+            items={footerMenuItems}
+            onClick={({ key }) => navigate(key)}
+            className="sidebar-menu sidebar-menu-footer"
+          />
+        </div>
       </Sider>
-      <Layout>
+      <Layout className="app-main">
         <Header className="app-header">
-          <Typography.Text strong>
+          <Typography.Text strong className="app-header-user" title={`${user?.currentGroupName} · ${user?.name}`}>
             {user?.currentGroupName} · {user?.name}
           </Typography.Text>
-          <Space>
+          <Space wrap className="app-header-actions">
             <MessageBell />
             <IdentitySwitcher />
             <Button type="text" icon={<LogoutOutlined />} onClick={() => { logout(); navigate('/login'); }}>
-              退出
+              <span className="app-header-logout-text">退出</span>
             </Button>
           </Space>
         </Header>

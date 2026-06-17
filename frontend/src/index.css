@@ -37,36 +37,170 @@ body {
 
 .app-layout {
   min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-sider.ant-layout-sider {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  position: sticky;
+  top: 0;
+  flex-shrink: 0;
+}
+
+.app-sider > .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.sidebar-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sidebar-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar-footer .ant-menu,
+.sidebar-menu {
+  border-inline-end: none !important;
+}
+
+.sidebar-menu .ant-menu-item {
+  height: auto;
+  min-height: var(--sidebar-item-min-height, 40px);
+  line-height: 1.35;
+  padding-block: clamp(6px, 1.2vh, 10px);
+  margin-inline: 4px;
+  width: calc(100% - 8px);
+}
+
+.sidebar-menu .ant-menu-item .ant-menu-title-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sider.ant-layout-sider-collapsed .logo {
+  padding: 4px;
+}
+
+.app-sider.ant-layout-sider-collapsed .sidebar-logo-img {
+  max-width: 40px;
+  max-height: 32px;
 }
 
 .logo {
-  height: 64px;
+  flex-shrink: 0;
+  height: clamp(48px, 8vh, 64px);
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   font-weight: 600;
-  font-size: 14px;
-  padding: 0 8px;
+  font-size: clamp(12px, 1.6vw, 14px);
+  padding: 0 clamp(6px, 1.5vw, 12px);
   text-align: center;
   line-height: 1.3;
+  overflow: hidden;
+}
+
+.app-layout--compact {
+  --sidebar-item-min-height: 36px;
+}
+
+.app-layout--short {
+  --sidebar-item-min-height: 34px;
+}
+
+.app-layout--short .logo {
+  height: 44px;
+  min-height: 44px;
 }
 
 .app-header {
   background: #fff;
-  padding: 0 24px;
+  padding: 0 clamp(12px, 2.5vw, 24px);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: clamp(48px, 8vh, 64px);
+  height: auto;
+  line-height: 1.4;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
+.app-header-user {
+  flex: 1;
+  min-width: 0;
+  max-width: min(42vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header-actions {
+  flex-shrink: 0;
+}
+
 .app-content {
-  margin: 24px;
-  padding: 24px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: clamp(8px, 1.5vw, 24px);
+  padding: clamp(12px, 2vw, 24px);
   background: #fff;
-  border-radius: 8px;
-  min-height: calc(100vh - 112px);
+  border-radius: clamp(6px, 1vw, 8px);
+}
+
+@media (max-width: 1200px) {
+  .app-header-user {
+    max-width: min(36vw, 280px);
+  }
+}
+
+@media (max-width: 900px) {
+  .app-header-logout-text {
+    display: none;
+  }
+}
+
+@media (max-height: 640px) {
+  .sidebar-menu .ant-menu-item {
+    min-height: 32px;
+    font-size: 13px;
+  }
+
+  .sidebar-logo-img {
+    max-height: 28px;
+  }
 }
 
 .rich-text-editor .ql-toolbar {
@@ -108,8 +242,8 @@ body {
 }
 
 .sidebar-logo-img {
-  max-height: 40px;
-  max-width: 120px;
+  max-height: clamp(28px, 5vh, 40px);
+  max-width: min(120px, 90%);
   object-fit: contain;
 }
 
@@ -171,9 +305,22 @@ body {
   z-index: 10;
 }
 
+.mobile-header-leading {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-header-back {
+  flex-shrink: 0;
+  padding-inline: 4px;
+  margin-inline: -4px;
+}
+
 .mobile-header-title {
   font-size: 16px;
-  max-width: 60vw;
+  flex: 1;
+  min-width: 0;
+  max-width: min(52vw, 280px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -208,6 +355,35 @@ body {
 
 .mobile-page .ant-card {
   border-radius: 10px;
+}
+
+.mobile-page .ant-table {
+  min-width: 640px;
+}
+
+.mobile-page .ant-form-item {
+  margin-bottom: 12px;
+}
+
+.mobile-page .ant-tabs-nav {
+  margin-bottom: 12px;
+}
+
+.mobile-page .ant-typography-title {
+  font-size: clamp(16px, 4vw, 20px) !important;
+}
+
+.mobile-page .ant-space-horizontal {
+  flex-wrap: wrap;
+}
+
+.mobile-page .ant-btn {
+  max-width: 100%;
+}
+
+.profile-page .profile-card,
+.profile-page .profile-section {
+  margin-bottom: 12px;
 }
 
 .mobile-tabbar {
@@ -247,6 +423,26 @@ body {
 
 .mobile-tabbar-item .anticon {
   font-size: 22px;
+}
+
+.mobile-layout--short .mobile-tabbar-item {
+  font-size: 10px;
+  padding: 4px 0 6px;
+}
+
+.mobile-layout--short .mobile-tabbar-item .anticon {
+  font-size: 20px;
+}
+
+.mobile-layout--short .mobile-header {
+  padding-top: calc(4px + env(safe-area-inset-top, 0px));
+  padding-bottom: 4px;
+}
+
+.mobile-more-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 4px;
+  padding-top: 4px;
 }
 
 .mobile-more-drawer .ant-drawer-body {
