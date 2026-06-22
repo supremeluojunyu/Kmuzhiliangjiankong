@@ -16,7 +16,7 @@ mkdir -p "$ROOT/data/uploads"
 
 echo "==> 启动后端 (8080)..."
 cd "$ROOT/backend"
-mvn -q spring-boot:run &
+TZ=Asia/Shanghai mvn -q spring-boot:run -Dspring-boot.run.jvmArguments="-Duser.timezone=Asia/Shanghai" &
 BACKEND_PID=$!
 
 echo "==> 启动前端 (5173)..."

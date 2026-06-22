@@ -1,0 +1,19 @@
+[Unit]
+Description=UQM Frontend (Vite Preview)
+After=network-online.target uqm-backend.service
+Wants=network-online.target
+PartOf=uqm.target
+
+[Service]
+Type=simple
+Environment=TZ=Asia/Shanghai
+WorkingDirectory=/home/golden/university-quality-monitor/frontend
+ExecStart=/home/golden/university-quality-monitor/scripts/uqm-frontend-start.sh
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+StandardOutput=append:/home/golden/university-quality-monitor/logs/uqm-frontend.log
+StandardError=append:/home/golden/university-quality-monitor/logs/uqm-frontend.log
+
+[Install]
+WantedBy=uqm.target default.target

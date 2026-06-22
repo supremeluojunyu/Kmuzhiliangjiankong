@@ -11,6 +11,8 @@ server:
 spring:
   application:
     name: university-quality-monitor
+  jackson:
+    time-zone: Asia/Shanghai
   datasource:
     url: jdbc:mysql://localhost:3306/uqm?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: uqm

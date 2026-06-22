@@ -1,0 +1,7 @@
+[Unit]
+Description=University Quality Monitor Stack
+After=network-online.target mysql.service redis-server.service nginx.service
+Wants=uqm-backend.service uqm-frontend.service frpc-uqm.service uqm-watchdog.timer
+
+[Install]
+WantedBy=default.target

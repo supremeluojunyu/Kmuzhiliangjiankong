@@ -1,0 +1,7 @@
+[Unit]
+Description=UQM Health Watchdog (one-shot)
+After=uqm-backend.service uqm-frontend.service frpc-uqm.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/golden/university-quality-monitor/scripts/uqm-watchdog.sh

@@ -1,0 +1,15 @@
+[Unit]
+Description=FRP Client - UQM Monitor (golden-uqm-web:5555)
+After=network-online.target uqm-frontend.service
+Wants=network-online.target
+PartOf=uqm.target
+
+[Service]
+Type=simple
+ExecStart=/home/golden/frp_0.52.3_linux_amd64/frpc -c /home/golden/frp_0.52.3_linux_amd64/frpc.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=uqm.target default.target
